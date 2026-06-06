@@ -291,6 +291,8 @@ button {
 
 .animate-fade-in {
   animation: fadeIn var(--transition-normal) forwards;
+  width: 100%;
+  max-width: 100%;
 }
 
 /* Responsive Table and Faturamento tweaks */
@@ -304,6 +306,10 @@ button {
   .table td {
     padding: 0.5rem 0.75rem;
     font-size: 0.8125rem;
+  }
+
+  .table {
+    min-width: 780px;
   }
 
   .table th {

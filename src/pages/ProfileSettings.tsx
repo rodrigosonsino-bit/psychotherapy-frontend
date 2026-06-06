@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Save, User, CreditCard, Shield, MapPin, ShieldCheck, ShieldOff, Copy, CalendarDays, CheckCircle, XCircle } from 'lucide-react';
+import { Save, User, CreditCard, Shield, MapPin, ShieldCheck, ShieldOff, Copy, CalendarDays, CheckCircle, XCircle, Smartphone, RefreshCw, Power, Loader2 } from 'lucide-react';
 import { fetchApi } from '../services/api';
-import type { TenantProfile, TotpSetupResult, GoogleCalendarStatus } from '../types/api';
+import type { TenantProfile, TotpSetupResult, GoogleCalendarStatus, WhatsappStatus } from '../types/api';
 import { useToast } from '../context/ToastContext';
 import Skeleton from '../components/Skeleton';
 import ErrorState from '../components/ErrorState';
@@ -105,6 +105,7 @@ export default function ProfileSettings() {
         </div>
       </div>
 
+      <WhatsappSection />
       <GoogleCalendarSection />
       <TwoFactorSection 
         enabled={formData.twoFactorEnabled} 
@@ -190,6 +191,185 @@ export default function ProfileSettings() {
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ── WhatsApp Section ──────────────────────────────────────────────────────────
+
+function WhatsappSection() {
+  const [status, setStatus] = useState<WhatsappStatus | null>(null);
+  const [qr, setQr] = useState<string | null>(null);
+  const [pairingPhone, setPairingPhone] = useState('');
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [pairingLoading, setPairingLoading] = useState(false);
+  const toast = useToast();
+
+  const loadStatus = useCallback(async () => {
+    try {
+      const res = await fetchApi<WhatsappStatus>('/api/psychotherapy/whatsapp/status');
+      setStatus(res);
+      // Se está conectando e tem QR, busca o QR code
+      if (!res.connected && res.hasQr) {
+        const qrRes = await fetchApi<{ qr: string }>('/api/psychotherapy/whatsapp/qr');
+        setQr(qrRes.qr);
+      } else {
+        setQr(null);
+      }
+    } catch {
+      setStatus({ connected: false, status: 'disconnected', hasQr: false });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadStatus();
+    // Polling a cada 5s enquanto estiver conectando (aguardando scan do QR)
+    const interval = setInterval(() => {
+      if (status?.status === 'connecting') loadStatus();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [loadStatus, status?.status]);
+
+  const handleConnect = async () => {
+    try {
+      setConnecting(true);
+      setPairingCode(null);
+      await fetchApi('/api/psychotherapy/whatsapp/connect', { method: 'POST', body: '{}' });
+      toast.success('Inicializando conexão WhatsApp...');
+      setTimeout(() => loadStatus(), 2000);
+    } catch (err) {
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Falha ao conectar WhatsApp.');
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      setDisconnecting(true);
+      await fetchApi('/api/psychotherapy/whatsapp/disconnect', { method: 'POST', body: '{}' });
+      toast.success('WhatsApp desconectado.');
+      setStatus({ connected: false, status: 'disconnected', hasQr: false });
+      setQr(null);
+      setPairingCode(null);
+    } catch (err) {
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Falha ao desconectar.');
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
+  const handleGetPairingCode = async () => {
+    if (!pairingPhone.trim()) { toast.error('Digite o número com DDI (ex: 5511999998888)'); return; }
+    try {
+      setPairingLoading(true);
+      const res = await fetchApi<{ code: string }>('/api/psychotherapy/whatsapp/pairing-code', {
+        method: 'POST',
+        body: JSON.stringify({ phoneNumber: pairingPhone.replace(/\D/g, '') }),
+      });
+      setPairingCode(res.code);
+    } catch (err) {
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Falha ao gerar código.');
+    } finally {
+      setPairingLoading(false);
+    }
+  };
+
+  const statusColor = status?.connected ? 'var(--status-success)' : status?.status === 'connecting' ? 'var(--status-warning)' : 'var(--text-muted)';
+  const statusLabel = status?.connected ? 'Conectado' : status?.status === 'connecting' ? 'Conectando...' : 'Desconectado';
+
+  return (
+    <div className="card profile-card mt-4" style={{ maxWidth: 700 }}>
+      <div className="flex items-center gap-2 mb-4">
+        <Smartphone size={20} style={{ color: '#25d366' }} />
+        <h3 className="text-h3" style={{ margin: 0 }}>WhatsApp — Lembretes Automáticos</h3>
+      </div>
+
+      {loading ? (
+        <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Verificando conexão...</div>
+      ) : (
+        <div>
+          {/* Status */}
+          <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <span style={{
+                width: 10, height: 10, borderRadius: '50%', background: statusColor, display: 'inline-block',
+                boxShadow: status?.status === 'connecting' ? `0 0 6px ${statusColor}` : undefined,
+              }} />
+              <span style={{ fontWeight: 500, color: statusColor }}>{statusLabel}</span>
+              {!status?.connected && (
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                  — conecte para enviar lembretes automáticos via WhatsApp
+                </span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button className="btn btn-secondary" onClick={loadStatus} title="Atualizar status">
+                <RefreshCw size={14} />
+              </button>
+              {status?.connected ? (
+                <button className="btn btn-secondary" onClick={handleDisconnect} disabled={disconnecting}>
+                  <Power size={14} /> {disconnecting ? 'Desconectando...' : 'Desconectar'}
+                </button>
+              ) : (
+                <button className="btn btn-primary" onClick={handleConnect} disabled={connecting}>
+                  <Smartphone size={14} /> {connecting ? 'Inicializando...' : 'Conectar WhatsApp'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* QR Code */}
+          {!status?.connected && qr && (
+            <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: '1rem', padding: '1rem', background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+              <img src={qr} alt="QR Code WhatsApp" style={{ width: 180, height: 180, borderRadius: 8 }} />
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Escaneie o QR Code</p>
+                <ol style={{ padding: '0 0 0 1.2rem', lineHeight: 1.9, fontSize: '0.9rem', color: 'var(--text-secondary)', margin: 0 }}>
+                  <li>Abra o WhatsApp no celular</li>
+                  <li>Toque em <strong>Dispositivos conectados</strong></li>
+                  <li>Toque em <strong>Conectar dispositivo</strong></li>
+                  <li>Aponte a câmera para o QR Code</li>
+                </ol>
+                <p style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  O QR expira em 60 segundos. Use "Atualizar status" se ele expirar.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Código de pareamento (alternativa ao QR) */}
+          {!status?.connected && (
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                <strong>Alternativa:</strong> conecte via código de 8 dígitos sem QR Code
+              </p>
+              <div className="flex gap-2" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Número com DDI (ex: 5511999998888)</label>
+                  <input type="text" className="form-control" value={pairingPhone}
+                    onChange={e => { setPairingPhone(e.target.value); setPairingCode(null); }}
+                    placeholder="5511999998888" style={{ width: 220 }} disabled={pairingLoading} />
+                </div>
+                <button className="btn btn-secondary" onClick={handleGetPairingCode} disabled={pairingLoading || !pairingPhone.trim()} style={{ whiteSpace: 'nowrap' }}>
+                  {pairingLoading ? <><Loader2 size={14} className="animate-spin" /> Gerando...</> : 'Gerar Código'}
+                </button>
+              </div>
+              {pairingCode && (
+                <div style={{ marginTop: '0.75rem', padding: '0.75rem 1rem', background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', display: 'inline-block' }}>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 0.3rem' }}>Insira este código no WhatsApp → Dispositivos conectados → Vincular com número</p>
+                  <span style={{ fontFamily: 'monospace', fontSize: '1.5rem', fontWeight: 700, letterSpacing: '0.2rem', color: 'var(--brand-primary)' }}>{pairingCode}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

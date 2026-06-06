@@ -13,6 +13,7 @@ const PAGE_SIZE = 20;
 
 import { MODALIDADE_OPTIONS, getModalidadeLabel } from '../constants/modalidade';
 import type { ModalidadeValue } from '../constants/modalidade';
+import type { ReminderChannel } from '../types/api';
 import { formatCurrency } from '../utils/formatters';
 
 export default function Patients() {
@@ -259,6 +260,7 @@ function PatientModal({ onClose, onSave }: { onClose: () => void; onSave: () => 
     document: '',
     phone: '',
     email: '',
+    reminderChannel: 'whatsapp' as ReminderChannel,
   });
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
@@ -279,6 +281,7 @@ function PatientModal({ onClose, onSave }: { onClose: () => void; onSave: () => 
           document: formData.document || null,
           phone: formData.phone || null,
           email: formData.email || null,
+          reminderChannel: formData.reminderChannel,
         })
       });
       toast.success('Paciente criado com sucesso.');
@@ -347,6 +350,17 @@ function PatientModal({ onClose, onSave }: { onClose: () => void; onSave: () => 
               <input type="email" className="form-control" value={formData.email}
                 onChange={e => setFormData({ ...formData, email: e.target.value })} disabled={submitting} />
             </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Canal de Lembrete</label>
+            <select className="form-control" value={formData.reminderChannel}
+              onChange={e => setFormData({ ...formData, reminderChannel: e.target.value as ReminderChannel })}
+              disabled={submitting}>
+              <option value="whatsapp">📱 WhatsApp</option>
+              <option value="email">📧 E-mail</option>
+              <option value="both">📱 + 📧 Ambos</option>
+              <option value="none">🔕 Nenhum</option>
+            </select>
           </div>
           <div className="flex justify-end gap-2 mt-6">
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={submitting}>Cancelar</button>

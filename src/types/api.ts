@@ -19,6 +19,8 @@ export interface AuthTokensResponse {
   tenant: { id: string; name: string; email: string; plan: string };
 }
 
+export type ReminderChannel = 'whatsapp' | 'email' | 'both' | 'none';
+
 export interface Patient {
   id: string;
   tenantId: string;
@@ -30,8 +32,15 @@ export interface Patient {
   document: string | null;
   phone: string | null;
   email: string | null;
+  reminderChannel: ReminderChannel;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface WhatsappStatus {
+  connected: boolean;
+  status: 'connected' | 'connecting' | 'disconnected';
+  hasQr: boolean;
 }
 
 export interface MonthlyRecord {

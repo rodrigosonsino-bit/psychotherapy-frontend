@@ -7,7 +7,7 @@ import {
 import { fetchApi } from '../services/api';
 import type {
   Patient, ClinicalNote, PaginatedResponse,
-  Anamnesis, TreatmentPlan, TreatmentPlanStatus, BookingLinkResult,
+  Anamnesis, TreatmentPlan, TreatmentPlanStatus, BookingLinkResult, ReminderChannel,
 } from '../types/api';
 import { MODALIDADE_OPTIONS, getModalidadeValue } from '../constants/modalidade';
 import type { ModalidadeValue } from '../constants/modalidade';
@@ -143,6 +143,7 @@ function DadosCadastraisTab({ patient, onSaved }: { patient: Patient; onSaved: (
     phone: patient.phone ?? '',
     email: patient.email ?? '',
     notes: patient.notes ?? '',
+    reminderChannel: (patient.reminderChannel ?? 'whatsapp') as ReminderChannel,
   });
   const [submitting, setSubmitting] = useState(false);
   const [linkLoading, setLinkLoading] = useState(false);
@@ -165,6 +166,7 @@ function DadosCadastraisTab({ patient, onSaved }: { patient: Patient; onSaved: (
           phone: form.phone || null,
           email: form.email || null,
           notes: form.notes || null,
+          reminderChannel: form.reminderChannel,
         }),
       });
       onSaved(updated);
@@ -246,11 +248,24 @@ function DadosCadastraisTab({ patient, onSaved }: { patient: Patient; onSaved: (
           </div>
         </div>
 
-        <div className="form-group">
-          <label className="form-label">Observações internas</label>
-          <textarea className="form-control" rows={3} value={form.notes}
-            onChange={e => setForm({ ...form, notes: e.target.value })} disabled={submitting}
-            placeholder="Notas sobre contato, plano de saúde, preferências..." style={{ resize: 'vertical' }} />
+        <div className="flex gap-4">
+          <div className="form-group w-full">
+            <label className="form-label">Observações internas</label>
+            <textarea className="form-control" rows={3} value={form.notes}
+              onChange={e => setForm({ ...form, notes: e.target.value })} disabled={submitting}
+              placeholder="Notas sobre contato, plano de saúde, preferências..." style={{ resize: 'vertical' }} />
+          </div>
+          <div className="form-group" style={{ minWidth: 190 }}>
+            <label className="form-label">Lembrete automático</label>
+            <select className="form-control" value={form.reminderChannel}
+              onChange={e => setForm({ ...form, reminderChannel: e.target.value as ReminderChannel })}
+              disabled={submitting}>
+              <option value="whatsapp">📱 WhatsApp</option>
+              <option value="email">📧 E-mail</option>
+              <option value="both">📱 + 📧 Ambos</option>
+              <option value="none">🔕 Nenhum</option>
+            </select>
+          </div>
         </div>
 
         <div className="flex gap-3 mt-4" style={{ flexWrap: 'wrap' }}>

@@ -38,7 +38,7 @@ export async function fetchApi<T = unknown>(
     }
 
     try {
-      const refreshResponse = await fetch('/auth/refresh', {
+      const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

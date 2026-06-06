@@ -338,7 +338,7 @@ export default function MonthlyRecords() {
                       )}
                     </td>
                     <td>
-                      {r.paymentType === 'monthly' || r.expectedSessions === 0 ? (
+                      {r.expectedSessions === 0 ? (
                         <span style={{ opacity: 0.5 }}>-</span>
                       ) : (
                         <div className="sessions-counter-container" style={{ userSelect: 'none' }}>

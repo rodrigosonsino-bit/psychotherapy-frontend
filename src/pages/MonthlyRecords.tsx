@@ -341,7 +341,7 @@ export default function MonthlyRecords() {
                       {r.paymentType === 'monthly' || r.expectedSessions === 0 ? (
                         <span style={{ opacity: 0.5 }}>-</span>
                       ) : (
-                        <div className="flex items-center gap-2" style={{ userSelect: 'none' }}>
+                        <div className="sessions-counter-container" style={{ userSelect: 'none' }}>
                           <button
                             className="btn btn-secondary"
                             style={{ 
@@ -429,7 +429,7 @@ export default function MonthlyRecords() {
                       )}
                     </td>
                     <td>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 actions-cell">
                         {r.expectedSessions > 0 && (
                           r.paymentStatus !== 'paid' ? (
                             <button 

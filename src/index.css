@@ -192,10 +192,28 @@ button {
 
 /* Tables */
 .table-container {
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   background-color: var(--bg-surface);
+}
+
+/* Custom premium scrollbar for table container to make scrollability obvious */
+.table-container::-webkit-scrollbar {
+  height: 6px;
+}
+.table-container::-webkit-scrollbar-track {
+  background: var(--bg-surface);
+}
+.table-container::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: var(--radius-full);
+}
+.table-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .table {
@@ -268,4 +286,51 @@ button {
 
 .animate-fade-in {
   animation: fadeIn var(--transition-normal) forwards;
+}
+
+/* Responsive Table and Faturamento tweaks */
+@media (max-width: 768px) {
+  .table th,
+  .table td {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .table th {
+    font-size: 0.7rem;
+  }
+
+  /* Limit select dropdown size in table cell */
+  .table td select.form-control {
+    max-width: 130px;
+    text-overflow: ellipsis;
+    padding: 2px 4px;
+    font-size: 0.75rem;
+  }
+
+  /* Actions column wrapping */
+  .actions-cell {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 0.375rem !important;
+  }
+
+  .actions-cell .btn {
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.7rem !important;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  /* Session counter container wrapping */
+  .sessions-counter-container {
+    flex-wrap: wrap;
+    gap: 0.25rem !important;
+  }
+
+  .sessions-counter-container .text-small {
+    display: block;
+    width: 100%;
+    margin-top: 2px;
+  }
 }

@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Users, Users2, Calendar, CalendarDays, Receipt, CreditCard, LogOut, Settings, Menu, X } from 'lucide-react';
+import { Home, Users, Users2, Calendar, CalendarDays, Receipt, CreditCard, FileText, LogOut, Settings, Menu, X } from 'lucide-react';
 import { tokenStorage } from '../services/auth';
 import { useState, useEffect } from 'react';
 import './Layout.css';
@@ -41,6 +41,7 @@ export default function Layout() {
     { path: '/expenses', icon: <CreditCard size={20} />, label: 'Despesas' },
     { path: '/monthly-records', icon: <Calendar size={20} />, label: 'Faturamento Mensal' },
     { path: '/receipts', icon: <Receipt size={20} />, label: 'Recibos' },
+    { path: '/fiscal', icon: <FileText size={20} />, label: 'Relatórios Fiscais' },
     { path: '/profile', icon: <Settings size={20} />, label: 'Meu Perfil' },
   ];
 

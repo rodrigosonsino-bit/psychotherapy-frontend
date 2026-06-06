@@ -233,3 +233,39 @@ export interface MonthResponse {
     pendingAmountCents: number;
   };
 }
+
+// ── IR / Fiscal ───────────────────────────────────────────────────────────────
+
+export interface IrMonthlyBreakdown {
+  month: string;         // 'YYYY-MM'
+  revenueCents: number;
+  expensesCents: number;
+}
+
+export interface IrPatientSummary {
+  patientId: string;
+  patientName: string;
+  document: string | null;   // CPF
+  totalPaidCents: number;
+  sessionCount: number;
+  months: string[];           // ['YYYY-MM', ...]
+}
+
+export interface IrReport {
+  year: number;
+  tenant: {
+    name: string;
+    fullName: string | null;
+    document: string | null;   // CPF/CNPJ da psicóloga
+    professionalId: string | null;  // CRP
+    address: string | null;
+    email: string;
+  };
+  summary: {
+    totalRevenueCents: number;
+    totalExpensesCents: number;
+    netIncomeCents: number;
+    monthlyBreakdown: IrMonthlyBreakdown[];
+  };
+  patientSummaries: IrPatientSummary[];
+}

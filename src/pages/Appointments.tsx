@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { SkeletonTable } from '../components/Skeleton';
 import ErrorState from '../components/ErrorState';
+import { CalendarView } from '../components/Calendar';
 import './Appointments.css';
 
 const STATUS_LABEL: Record<AppointmentStatus, string> = {
@@ -42,8 +43,9 @@ export default function Appointments() {
   const [showModal, setShowModal] = useState(false);
   const [editAppointment, setEditAppointment] = useState<Appointment | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
-  const [viewType, setViewType] = useState<'all' | 'week' | 'month'>('all');
+  const [viewType, setViewType] = useState<'all' | 'day' | 'week' | 'month'>('week');
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
+  const [prefilledDate, setPrefilledDate] = useState<string | null>(null);
   const toast = useToast();
   const PAGE_SIZE = 20;
 
@@ -83,6 +85,9 @@ export default function Appointments() {
 
           start = startOfWeek;
           end = endOfWeek;
+        } else if (vt === 'day') {
+          start = new Date(dt); start.setHours(0, 0, 0, 0);
+          end = new Date(dt); end.setHours(23, 59, 59, 999);
         } else {
           start = new Date(dt.getFullYear(), dt.getMonth(), 1, 0, 0, 0, 0);
           end = new Date(dt.getFullYear(), dt.getMonth() + 1, 0, 23, 59, 59, 999);
@@ -176,6 +181,12 @@ export default function Appointments() {
     navigator.clipboard.writeText(url).then(() => toast.success('Link copiado! Envie para o paciente.'));
   };
 
+  const handleSlotClick = (date: Date) => {
+    setEditAppointment(null);
+    setPrefilledDate(date.toISOString().slice(0, 16));
+    setShowModal(true);
+  };
+
   const getDateRangeLabel = () => {
     if (viewType === 'week') {
       const day = (currentDate.getDay() + 6) % 7;
@@ -190,6 +201,8 @@ export default function Appointments() {
       };
       
       return `Semana de ${formatLabelDate(startOfWeek)} a ${formatLabelDate(endOfWeek)}`;
+    } else if (viewType === 'day') {
+      return currentDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).replace(/^\w/, (c) => c.toUpperCase());
     } else {
       return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(/^\w/, (c) => c.toUpperCase());
     }
@@ -200,6 +213,8 @@ export default function Appointments() {
       const next = new Date(prev);
       if (viewType === 'week') {
         next.setDate(prev.getDate() - 7);
+      } else if (viewType === 'day') {
+        next.setDate(prev.getDate() - 1);
       } else {
         next.setMonth(prev.getMonth() - 1);
       }
@@ -212,6 +227,8 @@ export default function Appointments() {
       const next = new Date(prev);
       if (viewType === 'week') {
         next.setDate(prev.getDate() + 7);
+      } else if (viewType === 'day') {
+        next.setDate(prev.getDate() + 1);
       } else {
         next.setMonth(prev.getMonth() + 1);
       }
@@ -223,7 +240,7 @@ export default function Appointments() {
     <div className="appointments-page animate-fade-in">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-h1">Agendamentos</h1>
-        <button className="btn btn-primary" onClick={() => { setEditAppointment(null); setShowModal(true); }}>
+        <button className="btn btn-primary" onClick={() => { setEditAppointment(null); setPrefilledDate(null); setShowModal(true); }}>
           <Plus size={18} /> Novo Agendamento
         </button>
       </div>
@@ -244,6 +261,13 @@ export default function Appointments() {
             onClick={() => { setViewType('all'); setPage(1); }}
           >
             Todos
+          </button>
+          <button 
+            type="button"
+            className={`btn-toggle ${viewType === 'day' ? 'active' : ''}`} 
+            onClick={() => { setViewType('day'); }}
+          >
+            Dia
           </button>
           <button 
             type="button"
@@ -291,7 +315,7 @@ export default function Appointments() {
         <SkeletonTable rows={6} cols={5} />
       ) : error ? (
         <ErrorState title="Erro ao carregar" message="Não foi possível carregar os agendamentos." onRetry={() => loadAppointments(page, filterPatientId, viewType, currentDate)} />
-      ) : (
+      ) : viewType === 'all' ? (
         <>
           <div className="table-container">
             <table className="table">
@@ -405,13 +429,26 @@ export default function Appointments() {
             </div>
           )}
         </>
+      ) : (
+        <CalendarView
+          mode={viewType}
+          currentDate={currentDate}
+          appointments={appointments}
+          patients={patients}
+          onSlotClick={handleSlotClick}
+          onStatusUpdate={handleStatusUpdate}
+          onEdit={a => { setEditAppointment(a); setShowModal(true); }}
+          onDelete={id => setConfirmDelete({ open: true, id })}
+          onDayClick={date => { setCurrentDate(date); setViewType('day'); }}
+        />
       )}
 
       {showModal && (
         <AppointmentModal
           appointment={editAppointment}
+          initialScheduledAt={prefilledDate}
           patients={patients}
-          onClose={() => setShowModal(false)}
+          onClose={() => { setShowModal(false); setPrefilledDate(null); }}
           onSave={() => loadAppointments(page, filterPatientId, viewType, currentDate)}
         />
       )}
@@ -430,9 +467,10 @@ export default function Appointments() {
 
 // ── AppointmentModal ──────────────────────────────────────────────────────────
 
-function AppointmentModal({ appointment, patients, onClose, onSave }: {
+function AppointmentModal({ appointment, patients, initialScheduledAt, onClose, onSave }: {
   appointment: Appointment | null;
   patients: Patient[];
+  initialScheduledAt?: string | null;
   onClose: () => void;
   onSave: () => void;
 }) {
@@ -472,7 +510,7 @@ function AppointmentModal({ appointment, patients, onClose, onSave }: {
     patientId: appointment?.patientId || (patients[0]?.id ?? ''),
     scheduledAt: appointment
       ? new Date(appointment.scheduledAt).toISOString().slice(0, 16)
-      : now.toISOString().slice(0, 16),
+      : (initialScheduledAt || now.toISOString().slice(0, 16)),
     durationMinutes: appointment?.durationMinutes ?? 50,
     status: appointment?.status ?? 'scheduled',
     recurrence: initialRecInfo.recurrence,

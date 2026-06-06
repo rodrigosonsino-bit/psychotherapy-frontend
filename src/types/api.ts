@@ -269,3 +269,35 @@ export interface IrReport {
   };
   patientSummaries: IrPatientSummary[];
 }
+
+// ── Prontuário estruturado ────────────────────────────────────────────────────
+
+export interface Anamnesis {
+  id: string | null;
+  chiefComplaint: string | null;
+  onsetDescription: string | null;
+  previousTreatment: string | null;
+  medications: string | null;
+  familyHistory: string | null;
+  relevantHistory: string | null;
+  cidCodes: string[];
+  therapeuticApproach: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export type TreatmentPlanStatus = 'active' | 'completed' | 'suspended';
+
+export interface TreatmentPlan {
+  id: string;
+  title: string;
+  goals: string[];
+  approach: string | null;
+  targetSessions: number | null;
+  status: TreatmentPlanStatus;
+  startedAt: string;
+  endedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

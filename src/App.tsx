@@ -14,6 +14,7 @@ import Availability from './pages/Availability';
 import BookAppointment from './pages/BookAppointment';
 import Groups from './pages/Groups';
 import Fiscal from './pages/Fiscal';
+import PatientProfile from './pages/PatientProfile';
 import { tokenStorage } from './services/auth';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -33,6 +34,7 @@ function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="patients" element={<Patients />} />
+          <Route path="patients/:id" element={<PatientProfile />} />
           <Route path="appointments" element={<Appointments />} />
           <Route path="availability" element={<Availability />} />
           <Route path="sessions" element={<Sessions />} />

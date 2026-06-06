@@ -1,412 +1,232 @@
-import { useState, useEffect, useCallback } from 'react';
-import { FileText, Download, AlertTriangle, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { FileText, Download, AlertTriangle, ChevronDown } from 'lucide-react';
 import { fetchApi } from '../services/api';
 import type { IrReport, IrPatientSummary } from '../types/api';
 import { formatCurrency } from '../utils/formatters';
 import { useToast } from '../context/ToastContext';
-import { SkeletonTable } from '../components/Skeleton';
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const MONTH_NAMES: Record<string, string> = {
-  '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março',    '04': 'Abril',
-  '05': 'Maio',    '06': 'Junho',     '07': 'Julho',    '08': 'Agosto',
-  '09': 'Setembro','10': 'Outubro',   '11': 'Novembro', '12': 'Dezembro',
-};
-
-function monthLabel(yyyyMM: string): string {
-  const [year, mm] = yyyyMM.split('-');
-  return `${MONTH_NAMES[mm] ?? mm}/${year}`;
-}
-
-function escapeCsv(v: unknown): string {
-  if (v === null || v === undefined) return '';
-  const s = String(v);
-  return s.includes(',') || s.includes('"') || s.includes('\n')
-    ? `"${s.replace(/"/g, '""')}"`
-    : s;
-}
-
-// ── PDF individual do paciente ────────────────────────────────────────────────
-
-async function generatePatientPdf(
-  patient: IrPatientSummary,
-  year: number,
-  tenant: IrReport['tenant'],
-): Promise<void> {
-  const { jsPDF } = await import('jspdf');
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-
-  const margin = 20;
-  const pageW = 210;
-  let y = margin;
-
-  const line = (text: string, size = 10, bold = false) => {
-    doc.setFontSize(size);
-    doc.setFont('helvetica', bold ? 'bold' : 'normal');
-    doc.text(text, margin, y);
-    y += size * 0.5 + 2;
-  };
-
-  const hline = () => {
-    doc.setDrawColor(180);
-    doc.line(margin, y, pageW - margin, y);
-    y += 5;
-  };
-
-  // Cabeçalho
-  doc.setFillColor(245, 245, 250);
-  doc.rect(0, 0, pageW, 28, 'F');
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(40, 40, 80);
-  doc.text('INFORME DE PAGAMENTOS', margin, 12);
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(80, 80, 80);
-  doc.text(`Ano-Base ${year}  •  Imposto de Renda`, margin, 20);
-  doc.setTextColor(0);
-  y = 36;
-
-  // Prestador
-  line('PRESTADOR DE SERVIÇOS', 9, true);
-  hline();
-  line(`Nome: ${tenant.fullName ?? tenant.name}`);
-  if (tenant.professionalId) line(`CRP: ${tenant.professionalId}`);
-  if (tenant.document)       line(`CPF/CNPJ: ${tenant.document}`);
-  if (tenant.address)        line(`Endereço: ${tenant.address}`);
-  line(`E-mail: ${tenant.email}`);
-  y += 4;
-
-  // Paciente
-  line('TOMADOR (PACIENTE)', 9, true);
-  hline();
-  line(`Nome: ${patient.patientName}`);
-  line(`CPF: ${patient.document ?? '(não informado)'}`);
-  y += 4;
-
-  // Pagamentos mensais
-  line('PAGAMENTOS REALIZADOS NO ANO', 9, true);
-  hline();
-
-  // Valores mensais não vêm discriminados na patientSummary — mostramos
-  // os meses em que houve pagamento e o total geral no rodapé.
-  patient.months.forEach(m => {
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(monthLabel(m), margin, y);
-    doc.text('(sessão realizada)', margin + 60, y);
-    y += 6;
-  });
-
-  y += 4;
-  hline();
-
-  // Total
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('TOTAL PAGO NO ANO-BASE:', margin, y);
-  doc.text(
-    formatCurrency(patient.totalPaidCents),
-    pageW - margin - doc.getTextWidth(formatCurrency(patient.totalPaidCents)),
-    y,
-  );
-  y += 7;
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Número de sessões computadas: ${patient.sessionCount}`, margin, y);
-  y += 14;
-
-  // Rodapé legal
-  hline();
-  doc.setFontSize(8);
-  doc.setTextColor(100);
-  const notice = [
-    'Este documento comprova pagamentos realizados a título de honorários profissionais de psicólogo',
-    'e pode ser utilizado na Declaração de Imposto de Renda de Pessoa Física (DIRPF), na ficha',
-    '"Pagamentos Efetuados", código 21 — Médico, dentista, psicólogo, fisioterapeuta, terapeuta',
-    'ocupacional e fonoaudiólogo.',
-  ];
-  notice.forEach(l => { doc.text(l, margin, y); y += 4; });
-
-  // Data e assinatura
-  y += 6;
-  doc.setTextColor(0);
-  doc.setFontSize(10);
-  const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-  doc.text(`Emitido em ${today}`, margin, y);
-  y += 10;
-  doc.line(margin, y, margin + 70, y);
-  y += 5;
-  doc.text(tenant.fullName ?? tenant.name, margin, y);
-  if (tenant.professionalId) { y += 5; doc.text(`CRP ${tenant.professionalId}`, margin, y); }
-
-  const filename = `informe-ir-${year}-${patient.patientName.toLowerCase().replace(/\s+/g, '-')}.pdf`;
-  doc.save(filename);
-}
-
-// ── Componente principal ──────────────────────────────────────────────────────
 
 export default function Fiscal() {
-  const toast = useToast();
-  const currentYear = new Date().getFullYear();
-
-  // Ano padrão = ano anterior (época do IR)
-  const [year, setYear] = useState(currentYear - 1);
+  const [year, setYear] = useState<number>(new Date().getFullYear() - 1);
   const [report, setReport] = useState<IrReport | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [generatingPdf, setGeneratingPdf] = useState<string | null>(null); // patientId em geração
+  const [loading, setLoading] = useState<boolean>(true);
+  const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
+  const toast = useToast();
 
-  const loadReport = useCallback(async (y: number) => {
-    setLoading(true);
-    setReport(null);
+  const loadReport = async (targetYear: number) => {
     try {
-      const data = await fetchApi<IrReport>(`/api/psychotherapy/export/ir-report?year=${y}`);
+      setLoading(true);
+      const data = await fetchApi<IrReport>(`/api/psychotherapy/export/ir-report?year=${targetYear}`);
       setReport(data);
     } catch {
-      toast.error('Erro ao carregar relatório fiscal.');
+      toast.error('Erro ao carregar relatório fiscal');
     } finally {
       setLoading(false);
     }
-  }, [toast]);
-
-  useEffect(() => { loadReport(year); }, [year, loadReport]);
-
-  // ── CSV client-side ──────────────────────────────────────────────────────────
-  const handleExportCsv = () => {
-    if (!report) return;
-    const rows = [
-      ['Nome do Paciente', 'CPF', 'Total Pago (R$)', 'Sessões', 'Meses'].map(escapeCsv).join(','),
-      ...report.patientSummaries.map(p => [
-        p.patientName,
-        p.document ?? '',
-        (p.totalPaidCents / 100).toFixed(2).replace('.', ','),
-        p.sessionCount,
-        p.months.map(monthLabel).join('; '),
-      ].map(escapeCsv).join(',')),
-    ];
-    const csv = '﻿' + rows.join('\r\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    Object.assign(document.createElement('a'), {
-      href: url,
-      download: `informe-ir-${year}-pacientes.csv`,
-    }).click();
-    URL.revokeObjectURL(url);
   };
 
-  // ── PDF individual ────────────────────────────────────────────────────────────
-  const handleDownloadPdf = async (patient: IrPatientSummary) => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadReport(year); }, [year]);
+
+  const exportCsv = () => {
     if (!report) return;
-    setGeneratingPdf(patient.patientId);
+    
+    const rows = [
+      ['Nome do Paciente', 'CPF', 'Total Pago (R$)', 'Sessões'],
+      ...report.patientSummaries.map(p => [
+        p.patientName,
+        p.document || 'Sem CPF',
+        (p.totalPaidCents / 100).toFixed(2).replace('.', ','),
+        p.sessionCount.toString()
+      ])
+    ];
+
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" 
+      + rows.map(e => e.join(";")).join("\n");
+      
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `relatorio_fiscal_${year}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const generateIndividualPdf = async (patient: IrPatientSummary) => {
+    if (!report) return;
     try {
-      await generatePatientPdf(patient, year, report.tenant);
+      setGeneratingPdf(patient.patientId);
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF();
+
+      doc.setFontSize(16);
+      doc.text('RECIBO DE PRESTAÇÃO DE SERVIÇOS EM PSICOLOGIA', 105, 20, { align: 'center' });
+      
+      doc.setFontSize(12);
+      doc.text(`Ano Base: ${year}`, 105, 30, { align: 'center' });
+
+      doc.setFontSize(11);
+      doc.text(`Psicólogo(a): ${report.tenant.fullName || report.tenant.name}`, 20, 50);
+      if (report.tenant.document) doc.text(`CPF/CNPJ: ${report.tenant.document}`, 20, 58);
+      if (report.tenant.professionalId) doc.text(`Registro Profissional: ${report.tenant.professionalId}`, 20, 66);
+      if (report.tenant.address) doc.text(`Endereço: ${report.tenant.address}`, 20, 74);
+
+      doc.line(20, 80, 190, 80);
+
+      doc.text(`Recebi(emos) de ${patient.patientName}`, 20, 95);
+      if (patient.document) {
+        doc.text(`Inscrito(a) no CPF sob o nº: ${patient.document}`, 20, 103);
+      } else {
+        doc.text(`Inscrito(a) no CPF sob o nº: ________________________`, 20, 103);
+      }
+
+      doc.text(`A importância de ${formatCurrency(patient.totalPaidCents)}`, 20, 111);
+      doc.text(`Referente a ${patient.sessionCount} sessões de psicoterapia realizadas durante o ano de ${year}.`, 20, 119);
+      
+      doc.text(`Meses com registro de pagamento:`, 20, 127);
+      const monthsStr = patient.months.map(m => m.split('-').reverse().join('/')).join(', ');
+      doc.text(monthsStr, 20, 135);
+
+      doc.text('Por ser verdade, firmo o presente.', 20, 155);
+      doc.text(`Local e Data: ______________________, _____ de _________________ de _______`, 20, 163);
+
+      doc.line(60, 190, 150, 190);
+      doc.text(`${report.tenant.fullName || report.tenant.name}`, 105, 198, { align: 'center' });
+
+      doc.save(`Informe_Pagamentos_${patient.patientName.replace(/\s+/g, '_')}_${year}.pdf`);
     } catch {
-      toast.error('Erro ao gerar PDF.');
+      toast.error('Erro ao gerar PDF');
     } finally {
       setGeneratingPdf(null);
     }
   };
 
-  // ── Helpers de formatação ─────────────────────────────────────────────────────
-  const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i);
-  const noCpf = report?.patientSummaries.filter(p => !p.document).length ?? 0;
+  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
+
+  if (loading && !report) {
+    return <div className="p-8 text-center text-text-muted">Carregando relatório fiscal...</div>;
+  }
 
   return (
-    <div className="page-container">
-      {/* Cabeçalho */}
-      <div className="page-header">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="page-title">Relatórios Fiscais</h1>
-          <p className="page-subtitle">Declaração de IR e informes de pagamento por paciente</p>
+          <h1 className="text-2xl font-bold text-text-primary">Relatórios Fiscais</h1>
+          <p className="text-text-muted">Informe de rendimentos e recibos individuais para IRPF</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <select
-            className="form-control"
-            value={year}
-            onChange={e => setYear(parseInt(e.target.value, 10))}
-            style={{ width: 'auto' }}
-            aria-label="Selecionar ano"
-          >
-            {yearOptions.map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-          <button
-            className="btn btn-secondary"
-            onClick={handleExportCsv}
-            disabled={!report || loading}
-          >
-            <Download size={16} /> Exportar CSV
-          </button>
+
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <select
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+              className="appearance-none bg-surface border border-border-color rounded-lg pl-4 pr-10 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+            >
+              {years.map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
+          </div>
         </div>
       </div>
 
-      {/* Aviso de CPF ausente */}
-      {!loading && noCpf > 0 && (
-        <div className="alert alert-warning" style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
-          <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
-          <span>
-            <strong>{noCpf} paciente{noCpf > 1 ? 's' : ''}</strong> sem CPF cadastrado.
-            O informe individual desses pacientes será gerado sem CPF — cadastre-o na tela de Pacientes antes de enviar.
-          </span>
-        </div>
-      )}
-
-      {/* Cards de resumo */}
-      {loading ? (
-        <SkeletonTable rows={3} cols={3} />
-      ) : report ? (
+      {report && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
-            <SummaryCard
-              icon={<TrendingUp size={22} color="var(--status-success)" />}
-              label="Receita Bruta"
-              value={formatCurrency(report.summary.totalRevenueCents)}
-              color="var(--status-success)"
-            />
-            <SummaryCard
-              icon={<TrendingDown size={22} color="var(--status-danger)" />}
-              label="Despesas Dedutíveis"
-              value={formatCurrency(report.summary.totalExpensesCents)}
-              color="var(--status-danger)"
-            />
-            <SummaryCard
-              icon={<DollarSign size={22} color="var(--status-info)" />}
-              label="Resultado Líquido"
-              value={formatCurrency(report.summary.netIncomeCents)}
-              color={report.summary.netIncomeCents >= 0 ? 'var(--status-info)' : 'var(--status-danger)'}
-            />
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-surface rounded-xl border border-border-color p-6">
+              <div className="text-sm text-text-muted mb-2">Receita Bruta ({year})</div>
+              <div className="text-2xl font-semibold text-green-500">
+                {formatCurrency(report.summary.totalRevenueCents)}
+              </div>
+            </div>
+            
+            <div className="bg-surface rounded-xl border border-border-color p-6">
+              <div className="text-sm text-text-muted mb-2">Despesas Dedutíveis</div>
+              <div className="text-2xl font-semibold text-red-500">
+                {formatCurrency(report.summary.totalExpensesCents)}
+              </div>
+            </div>
+
+            <div className="bg-surface rounded-xl border border-border-color p-6">
+              <div className="text-sm text-text-muted mb-2">Resultado Líquido</div>
+              <div className="text-2xl font-semibold text-text-primary">
+                {formatCurrency(report.summary.netIncomeCents)}
+              </div>
+            </div>
           </div>
 
-          {/* Breakdown mensal */}
-          {report.summary.monthlyBreakdown.length > 0 && (
-            <div className="card" style={{ marginBottom: '1.5rem', overflowX: 'auto' }}>
-              <div className="card-header">
-                <h3 className="card-title">Breakdown Mensal — {year}</h3>
-              </div>
-              <table className="table">
+          {/* Pacientes List */}
+          <div className="bg-surface border border-border-color rounded-xl overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-border-color flex justify-between items-center bg-bg-primary/50">
+              <h2 className="font-medium text-text-primary">Pacientes e Pagamentos</h2>
+              <button 
+                onClick={exportCsv}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 rounded-lg transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                Exportar Resumo (CSV)
+              </button>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr>
-                    <th>Mês</th>
-                    <th style={{ textAlign: 'right' }}>Receita</th>
-                    <th style={{ textAlign: 'right' }}>Despesas</th>
-                    <th style={{ textAlign: 'right' }}>Resultado</th>
+                  <tr className="border-b border-border-color text-sm text-text-muted">
+                    <th className="p-4 font-medium">Nome do Paciente</th>
+                    <th className="p-4 font-medium">CPF</th>
+                    <th className="p-4 font-medium">Pago no Ano</th>
+                    <th className="p-4 font-medium">Sessões</th>
+                    <th className="p-4 font-medium"></th>
                   </tr>
                 </thead>
-                <tbody>
-                  {report.summary.monthlyBreakdown.map(m => {
-                    const net = m.revenueCents - m.expensesCents;
-                    return (
-                      <tr key={m.month}>
-                        <td>{monthLabel(m.month)}</td>
-                        <td style={{ textAlign: 'right', color: 'var(--status-success)' }}>
-                          {formatCurrency(m.revenueCents)}
-                        </td>
-                        <td style={{ textAlign: 'right', color: 'var(--status-danger)' }}>
-                          {formatCurrency(m.expensesCents)}
-                        </td>
-                        <td style={{ textAlign: 'right', fontWeight: 500, color: net >= 0 ? 'var(--status-success)' : 'var(--status-danger)' }}>
-                          {formatCurrency(net)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Tabela de pacientes */}
-          <div className="card" style={{ overflowX: 'auto' }}>
-            <div className="card-header">
-              <h3 className="card-title">
-                Pacientes — {report.patientSummaries.length} com pagamentos em {year}
-              </h3>
-            </div>
-            {report.patientSummaries.length === 0 ? (
-              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                <FileText size={36} style={{ opacity: 0.3, marginBottom: '0.75rem' }} />
-                <p>Nenhum pagamento registrado em {year}.</p>
-              </div>
-            ) : (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Paciente</th>
-                    <th>CPF</th>
-                    <th style={{ textAlign: 'right' }}>Total Pago</th>
-                    <th style={{ textAlign: 'center' }}>Sessões</th>
-                    <th style={{ textAlign: 'center' }}>Informe</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.patientSummaries.map(p => (
-                    <tr key={p.patientId}>
-                      <td style={{ fontWeight: 500 }}>{p.patientName}</td>
-                      <td>
-                        {p.document ? (
-                          <span style={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{p.document}</span>
-                        ) : (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', color: 'var(--status-warning)', fontSize: '0.8rem' }}>
-                            <AlertTriangle size={13} /> sem CPF
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>
-                        {formatCurrency(p.totalPaidCents)}
-                      </td>
-                      <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
-                        {p.sessionCount}
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
-                          onClick={() => handleDownloadPdf(p)}
-                          disabled={generatingPdf === p.patientId}
-                          title={`Gerar informe de ${p.patientName}`}
-                        >
-                          {generatingPdf === p.patientId ? (
-                            '...'
-                          ) : (
-                            <><FileText size={13} /> PDF</>
-                          )}
-                        </button>
+                <tbody className="text-sm divide-y divide-border-color">
+                  {report.patientSummaries.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-text-muted">
+                        Nenhum registro de faturamento pago encontrado para {year}.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    report.patientSummaries.map((patient) => (
+                      <tr key={patient.patientId} className="hover:bg-bg-primary/30 transition-colors">
+                        <td className="p-4 text-text-primary font-medium">{patient.patientName}</td>
+                        <td className="p-4">
+                          {patient.document ? (
+                            <span className="text-text-secondary">{patient.document}</span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-orange-500 text-xs font-medium px-2 py-0.5 rounded-full bg-orange-500/10">
+                              <AlertTriangle className="w-3 h-3" />
+                              Falta CPF
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-4 font-medium text-green-500">
+                          {formatCurrency(patient.totalPaidCents)}
+                        </td>
+                        <td className="p-4 text-text-secondary">
+                          {patient.sessionCount}
+                        </td>
+                        <td className="p-4 text-right">
+                          <button
+                            onClick={() => generateIndividualPdf(patient)}
+                            disabled={generatingPdf === patient.patientId}
+                            className="inline-flex items-center justify-center p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-colors disabled:opacity-50"
+                            title="Gerar Informe (PDF)"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
-            )}
+            </div>
           </div>
         </>
-      ) : null}
-    </div>
-  );
-}
-
-// ── Card de resumo ────────────────────────────────────────────────────────────
-function SummaryCard({
-  icon, label, value, color,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  color: string;
-}) {
-  return (
-    <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1.25rem' }}>
-      <div style={{
-        width: 44, height: 44, borderRadius: '50%',
-        background: `color-mix(in srgb, ${color} 12%, transparent)`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-      }}>
-        {icon}
-      </div>
-      <div>
-        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>{label}</div>
-        <div style={{ fontSize: '1.25rem', fontWeight: 700, color }}>{value}</div>
-      </div>
+      )}
     </div>
   );
 }

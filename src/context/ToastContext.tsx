@@ -24,13 +24,14 @@ type Action =
 
 function toastReducer(state: ToastItem[], action: Action): ToastItem[] {
   switch (action.type) {
-    case 'ADD_TOAST':
+    case 'ADD_TOAST': {
       // Limit to max 3 toasts: if already at 3, drop the oldest one (first in list)
       const nextState = [...state, action.payload];
       if (nextState.length > 3) {
         nextState.shift();
       }
       return nextState;
+    }
     case 'REMOVE_TOAST':
       return state.filter((toast) => toast.id !== action.payload);
     default:
@@ -67,6 +68,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useToast() {
   const context = useContext(ToastContext);
   if (!context) {

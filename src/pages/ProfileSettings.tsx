@@ -231,7 +231,7 @@ function GoogleCalendarSection() {
       window.history.replaceState({}, '', '/profile');
     }
     loadStatus();
-  }, [loadStatus]);
+  }, [loadStatus, toast]);
 
   const handleConnect = async () => {
     try {

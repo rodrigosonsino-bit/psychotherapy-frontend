@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import type { Patient } from '../types/api';
 import {
   Users, ChevronLeft, ChevronRight, ClipboardCheck,
   Clock, Calendar, CheckCircle2, XCircle, AlertCircle, RefreshCw,
@@ -101,7 +102,7 @@ export default function Groups() {
       if (res.data.length > 0 && !selectedGroup) {
         setSelectedGroup(res.data[0]);
       }
-    } catch (err) {
+    } catch {
       toast.error('Erro ao carregar grupos.');
     } finally {
       setLoadingGroups(false);
@@ -116,7 +117,7 @@ export default function Groups() {
         `/api/psychotherapy/groups/${groupId}/members?month=${month}`
       );
       setMembers(res.data);
-    } catch (err) {
+    } catch {
       toast.error('Erro ao carregar membros.');
     } finally {
       setLoadingMembers(false);
@@ -700,7 +701,7 @@ function AddMemberModal({
   onSuccess: () => void;
 }) {
   const toast = useToast();
-  const [patients, setPatients] = useState<any[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -708,9 +709,9 @@ function AddMemberModal({
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetchApi<{ data: any[] }>('/api/psychotherapy/patients?includeInactive=false');
+        const res = await fetchApi<{ data: Patient[] }>('/api/psychotherapy/patients?includeInactive=false');
         setPatients(res.data);
-      } catch (err) {
+      } catch {
         toast.error('Erro ao carregar pacientes.');
       } finally {
         setLoading(false);
@@ -785,7 +786,7 @@ function AddMemberModal({
                   <div>
                     <strong>{p.name}</strong>
                     <div className="text-small" style={{ color: 'var(--text-secondary)' }}>
-                      {p.status === 'inativo' ? 'Inativo' : 'Ativo'}
+                      {p.status === 'inactive' ? 'Inativo' : 'Ativo'}
                     </div>
                   </div>
                   <button 

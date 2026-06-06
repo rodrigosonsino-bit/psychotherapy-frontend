@@ -245,7 +245,7 @@ export default function MonthlyRecords() {
         headers: { Accept: 'text/csv' },
         responseType: 'blob'
       });
-      const url = URL.createObjectURL(new Blob([blob as any], { type: 'text/csv' }));
+      const url = URL.createObjectURL(new Blob([blob], { type: 'text/csv' }));
       Object.assign(document.createElement('a'), { href: url, download: `faturamento-${monthStr}.csv` }).click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -308,7 +308,7 @@ export default function MonthlyRecords() {
             className="form-control" 
             style={{ width: 'auto', padding: '0.25rem 2rem 0.25rem 0.75rem', height: '32px', fontSize: '0.875rem' }}
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
+            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'partial' | 'paid')}
           >
             <option value="all">Todos os Status</option>
             <option value="pending">Pendentes</option>

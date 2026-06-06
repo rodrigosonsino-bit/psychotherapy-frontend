@@ -90,7 +90,7 @@ export default function Expenses() {
         headers: { Accept: 'text/csv' },
         responseType: 'blob'
       });
-      const url = URL.createObjectURL(new Blob([blob as any], { type: 'text/csv' }));
+      const url = URL.createObjectURL(new Blob([blob], { type: 'text/csv' }));
       Object.assign(document.createElement('a'), { href: url, download: 'despesas.csv' }).click();
       URL.revokeObjectURL(url);
     } catch (err) {

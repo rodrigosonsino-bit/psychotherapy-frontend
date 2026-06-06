@@ -71,7 +71,7 @@ export async function fetchApi<T = unknown>(
           try {
             const errData = await retryResponse.json();
             errorMsg = errData.error || errData.message || errorMsg;
-          } catch (e) {}
+          } catch { /* ignore non-JSON error response body */ }
           throw new Error(errorMsg);
         }
 
@@ -89,7 +89,7 @@ export async function fetchApi<T = unknown>(
       // Se o refresh também falhar, limpar os tokens e redirecionar
       tokenStorage.clearTokens();
       window.location.href = '/auth';
-      throw new Error('Sessão expirada. Por favor, faça login novamente.');
+      throw new Error('Sessão expirada. Por favor, faça login novamente.', { cause: refreshError });
     }
   }
 
@@ -98,9 +98,7 @@ export async function fetchApi<T = unknown>(
     try {
       const data = await response.json();
       errorMsg = data.error || data.message || errorMsg;
-    } catch (e) {
-      // Ignore JSON parse error for non-JSON responses
-    }
+    } catch { /* ignore JSON parse error for non-JSON responses */ }
     throw new Error(errorMsg);
   }
 

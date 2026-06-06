@@ -178,20 +178,16 @@ export default function Dashboard() {
                 const patName = patients.find(p => p.id === appt.patientId)?.name || 'Paciente desconhecido';
                 const time = format(new Date(appt.scheduledAt), 'HH:mm');
                 
-                let statusColor = 'var(--text-primary)';
-                let statusBg = 'var(--bg-surface)';
-                let borderLeft = '4px solid var(--border-color)';
-                
-                if (appt.status === 'canceled' || appt.status === 'no_show') {
-                  statusColor = 'var(--text-muted)';
-                  borderLeft = '4px solid var(--status-danger)';
-                } else if (appt.status === 'attended') {
-                  borderLeft = '4px solid var(--status-success)';
-                } else if (appt.status === 'confirmed') {
-                  borderLeft = '4px solid var(--status-info)';
-                } else {
-                  borderLeft = '4px solid var(--status-warning)';
-                }
+                const isCanceledOrNoShow = appt.status === 'canceled' || appt.status === 'no_show';
+                const statusColor = isCanceledOrNoShow ? 'var(--text-muted)' : 'var(--text-primary)';
+                const statusBg = 'var(--bg-surface)';
+                const borderLeft = isCanceledOrNoShow
+                  ? '4px solid var(--status-danger)'
+                  : appt.status === 'attended'
+                    ? '4px solid var(--status-success)'
+                    : appt.status === 'confirmed'
+                      ? '4px solid var(--status-info)'
+                      : '4px solid var(--status-warning)';
 
                 return (
                   <div key={appt.id} style={{

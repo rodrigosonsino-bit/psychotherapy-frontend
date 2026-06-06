@@ -47,7 +47,7 @@ export default function Patients() {
     }
   }, [page, search, toast]);
 
-  useEffect(() => { loadPatients(page, search); }, [page, search]);
+  useEffect(() => { loadPatients(page, search); }, [page, search, loadPatients]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;

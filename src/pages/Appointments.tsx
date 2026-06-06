@@ -72,7 +72,7 @@ export default function Appointments() {
         let end: Date;
 
         if (vt === 'week') {
-          const day = dt.getDay();
+          const day = (dt.getDay() + 6) % 7;
           const startOfWeek = new Date(dt);
           startOfWeek.setDate(dt.getDate() - day);
           startOfWeek.setHours(0, 0, 0, 0);
@@ -114,7 +114,7 @@ export default function Appointments() {
         body: JSON.stringify({ status })
       });
       toast.success('Status atualizado.');
-      loadAppointments(page, filterPatientId);
+      loadAppointments(page, filterPatientId, viewType, currentDate);
     } catch (err) {
       toast.error((err instanceof Error ? err.message : String(err)) || 'Falha ao atualizar status.');
     }
@@ -126,7 +126,7 @@ export default function Appointments() {
     try {
       await fetchApi(`/api/psychotherapy/appointments/${id}`, { method: 'DELETE' });
       toast.success('Agendamento excluído.');
-      await loadAppointments(page, filterPatientId);
+      await loadAppointments(page, filterPatientId, viewType, currentDate);
     } catch (err) {
       toast.error((err instanceof Error ? err.message : String(err)) || 'Falha ao excluir.');
     } finally {
@@ -161,7 +161,7 @@ export default function Appointments() {
         })
       });
       toast.success('Recorrência atualizada.');
-      await loadAppointments(page, filterPatientId);
+      await loadAppointments(page, filterPatientId, viewType, currentDate);
     } catch (err) {
       toast.error((err instanceof Error ? err.message : String(err)) || 'Erro ao atualizar recorrência.');
       setAppointments(previousAppointments);
@@ -178,7 +178,7 @@ export default function Appointments() {
 
   const getDateRangeLabel = () => {
     if (viewType === 'week') {
-      const day = currentDate.getDay();
+      const day = (currentDate.getDay() + 6) % 7;
       const startOfWeek = new Date(currentDate);
       startOfWeek.setDate(currentDate.getDate() - day);
       
@@ -290,7 +290,7 @@ export default function Appointments() {
       {loading ? (
         <SkeletonTable rows={6} cols={5} />
       ) : error ? (
-        <ErrorState title="Erro ao carregar" message="Não foi possível carregar os agendamentos." onRetry={() => loadAppointments(page, filterPatientId)} />
+        <ErrorState title="Erro ao carregar" message="Não foi possível carregar os agendamentos." onRetry={() => loadAppointments(page, filterPatientId, viewType, currentDate)} />
       ) : (
         <>
           <div className="table-container">
@@ -412,7 +412,7 @@ export default function Appointments() {
           appointment={editAppointment}
           patients={patients}
           onClose={() => setShowModal(false)}
-          onSave={() => loadAppointments(page, filterPatientId)}
+          onSave={() => loadAppointments(page, filterPatientId, viewType, currentDate)}
         />
       )}
 

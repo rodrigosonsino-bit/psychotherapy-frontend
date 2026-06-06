@@ -42,7 +42,7 @@ export default function Sessions() {
       setLoading(true);
       setError(false);
       const [patientsData, sessionsData] = await Promise.all([
-        fetchApi<PaginatedResponse<Patient>>('/api/psychotherapy/patients'),
+        fetchApi<PaginatedResponse<Patient>>('/api/psychotherapy/patients?limit=200'),
         fetchApi<PaginatedResponse<Session>>('/api/psychotherapy/sessions')
       ]);
       setPatients((patientsData.data || []).filter(p => p.status !== 'inactive'));
@@ -75,7 +75,7 @@ export default function Sessions() {
       });
       toast.success('Sessão registrada com sucesso.');
       setNotes('');
-      loadData();
+      await loadData();
     } catch (err) {
       console.error(err);
       toast.error((err instanceof Error ? err.message : String(err)) || 'Falha ao registrar sessão.');
@@ -95,7 +95,7 @@ export default function Sessions() {
     try {
       await fetchApi(`/api/psychotherapy/sessions/${id}`, { method: 'DELETE' });
       toast.success('Sessão excluída com sucesso.');
-      loadData();
+      await loadData();
     } catch (err) {
       console.error(err);
       toast.error((err instanceof Error ? err.message : String(err)) || 'Falha ao excluir registro de sessão.');
@@ -119,18 +119,32 @@ export default function Sessions() {
     return p ? p.name : 'Paciente Desconhecido';
   };
 
+  const handleExport = async () => {
+    try {
+      const blob = await fetchApi<Blob>('/api/psychotherapy/export/sessions', {
+        headers: { Accept: 'text/csv' },
+        responseType: 'blob'
+      });
+      const url = URL.createObjectURL(new Blob([blob as any], { type: 'text/csv' }));
+      Object.assign(document.createElement('a'), { href: url, download: 'sessoes.csv' }).click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao exportar sessões.');
+    }
+  };
+
   return (
     <div className="sessions-container animate-fade-in">
       <div className="sessions-header flex justify-between items-center">
         <h1 className="text-h1">Diário de Sessões</h1>
-        <a
-          href="/api/psychotherapy/export/sessions"
-          download="sessoes.csv"
+        <button
+          onClick={handleExport}
           className="btn btn-secondary"
           style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}
         >
           <Download size={16} /> CSV
-        </a>
+        </button>
       </div>
 
       <form className="new-session-form" onSubmit={handleSubmit}>

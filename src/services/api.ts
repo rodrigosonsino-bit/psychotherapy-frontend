@@ -4,7 +4,7 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export async function fetchApi<T = unknown>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit & { responseType?: 'json' | 'blob' | 'text' } = {}
 ): Promise<T> {
   const url = `${BASE_URL}${endpoint}`;
   
@@ -79,6 +79,8 @@ export async function fetchApi<T = unknown>(
           return null as unknown as T;
         }
 
+        if (options.responseType === 'blob') return retryResponse.blob() as unknown as T;
+        if (options.responseType === 'text') return retryResponse.text() as unknown as T;
         return retryResponse.json();
       } else {
         throw new Error('Invalid tokens received');
@@ -107,5 +109,7 @@ export async function fetchApi<T = unknown>(
     return null as unknown as T;
   }
 
+  if (options.responseType === 'blob') return response.blob() as unknown as T;
+  if (options.responseType === 'text') return response.text() as unknown as T;
   return response.json();
 }

@@ -71,7 +71,7 @@ export default function Expenses() {
       toast.success('Despesa registrada com sucesso.');
       setDescription('');
       setAmount('');
-      loadData();
+      await loadData();
     } catch (err) {
       console.error(err);
       toast.error((err instanceof Error ? err.message : String(err)) || 'Falha ao salvar despesa.');
@@ -91,7 +91,7 @@ export default function Expenses() {
     try {
       await fetchApi(`/api/psychotherapy/expenses/${id}`, { method: 'DELETE' });
       toast.success('Despesa excluída com sucesso.');
-      loadData();
+      await loadData();
     } catch (err) {
       console.error(err);
       toast.error((err instanceof Error ? err.message : String(err)) || 'Falha ao excluir despesa.');
@@ -115,18 +115,32 @@ export default function Expenses() {
     return map[cat] || cat;
   };
 
+  const handleExport = async () => {
+    try {
+      const blob = await fetchApi<Blob>('/api/psychotherapy/export/expenses', {
+        headers: { Accept: 'text/csv' },
+        responseType: 'blob'
+      });
+      const url = URL.createObjectURL(new Blob([blob as any], { type: 'text/csv' }));
+      Object.assign(document.createElement('a'), { href: url, download: 'despesas.csv' }).click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao exportar despesas.');
+    }
+  };
+
   return (
     <div className="expenses-container animate-fade-in">
       <div className="expenses-header flex justify-between items-center">
         <h1 className="text-h1">Despesas do Consultório</h1>
-        <a
-          href="/api/psychotherapy/export/expenses"
-          download="despesas.csv"
+        <button
+          onClick={handleExport}
           className="btn btn-secondary"
           style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}
         >
           <Download size={16} /> CSV
-        </a>
+        </button>
       </div>
 
       <form className="new-expense-form" onSubmit={handleSubmit}>

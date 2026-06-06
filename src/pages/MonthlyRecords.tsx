@@ -246,6 +246,21 @@ export default function MonthlyRecords() {
     setShowReminderModal(false);
   };
 
+  const handleExport = async () => {
+    try {
+      const blob = await fetchApi<Blob>(`/api/psychotherapy/export/months/${monthStr}`, {
+        headers: { Accept: 'text/csv' },
+        responseType: 'blob'
+      });
+      const url = URL.createObjectURL(new Blob([blob as any], { type: 'text/csv' }));
+      Object.assign(document.createElement('a'), { href: url, download: `faturamento-${monthStr}.csv` }).click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao exportar faturamento.');
+    }
+  };
+
   return (
     <div className="animate-fade-in">
       <div className="flex justify-between items-center mb-6">
@@ -265,14 +280,13 @@ export default function MonthlyRecords() {
             </button>
           </div>
           
-          <a
-            href={`/api/psychotherapy/export/months/${monthStr}`}
-            download={`faturamento-${monthStr}.csv`}
+          <button
+            onClick={handleExport}
             className="btn btn-secondary"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}
           >
             <Download size={16} /> CSV
-          </a>
+          </button>
 
           <button
             className="btn btn-primary"
@@ -338,7 +352,7 @@ export default function MonthlyRecords() {
                       )}
                     </td>
                     <td>
-                      {r.expectedSessions === 0 ? (
+                      {r.paymentType === 'monthly' || r.expectedSessions === 0 ? (
                         <span style={{ opacity: 0.5 }}>-</span>
                       ) : (
                         <div className="sessions-counter-container" style={{ userSelect: 'none' }}>

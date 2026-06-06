@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Users, Calendar, CalendarDays, Receipt, CreditCard, LogOut, Settings, Menu, X } from 'lucide-react';
+import { Home, Users, Users2, Calendar, CalendarDays, Receipt, CreditCard, LogOut, Settings, Menu, X } from 'lucide-react';
 import { tokenStorage } from '../services/auth';
 import { useState, useEffect } from 'react';
 import './Layout.css';
@@ -34,6 +34,7 @@ export default function Layout() {
   const navItems = [
     { path: '/dashboard', icon: <Home size={20} />, label: 'Dashboard' },
     { path: '/patients', icon: <Users size={20} />, label: 'Pacientes' },
+    { path: '/groups', icon: <Users2 size={20} />, label: 'Grupos Terapêuticos' },
     { path: '/appointments', icon: <Calendar size={20} />, label: 'Agendamentos' },
     { path: '/availability', icon: <CalendarDays size={20} />, label: 'Minha Disponibilidade' },
     { path: '/sessions', icon: <CalendarDays size={20} />, label: 'Diário de Sessões' },

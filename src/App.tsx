@@ -12,6 +12,7 @@ import Appointments from './pages/Appointments';
 import ConfirmAppointment from './pages/ConfirmAppointment';
 import Availability from './pages/Availability';
 import BookAppointment from './pages/BookAppointment';
+import Groups from './pages/Groups';
 import { tokenStorage } from './services/auth';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -37,6 +38,7 @@ function App() {
           <Route path="expenses" element={<Expenses />} />
           <Route path="monthly-records" element={<MonthlyRecords />} />
           <Route path="receipts" element={<Receipts />} />
+          <Route path="groups" element={<Groups />} />
           <Route path="profile" element={<ProfileSettings />} />
         </Route>
       </Routes>

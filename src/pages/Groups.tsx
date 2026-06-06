@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users, ChevronLeft, ChevronRight, ClipboardCheck,
-  Clock, Calendar, CheckCircle2, XCircle, AlertCircle, RefreshCw
+  Clock, Calendar, CheckCircle2, XCircle, AlertCircle, RefreshCw,
+  UserPlus, UserMinus, Search
 } from 'lucide-react';
 import { fetchApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -89,6 +90,7 @@ export default function Groups() {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(() => monthStr(new Date()));
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
 
   // Load groups
   const loadGroups = useCallback(async () => {
@@ -152,6 +154,22 @@ export default function Groups() {
     const [y, m] = currentMonth.split('-').map(Number);
     const d = new Date(y, m, 1);
     setCurrentMonth(monthStr(d));
+  };
+
+  const removeMember = async (patientId: string, name: string) => {
+    if (!selectedGroup) return;
+    if (!window.confirm(`Tem certeza que deseja remover ${name} do grupo ${selectedGroup.name}?\n\nO histórico financeiro anterior será mantido.`)) {
+      return;
+    }
+    try {
+      await fetchApi(`/api/psychotherapy/groups/${selectedGroup.id}/members/${patientId}`, {
+        method: 'DELETE'
+      });
+      toast.success('Membro removido com sucesso!');
+      loadMembers(selectedGroup.id, currentMonth);
+    } catch (err) {
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Erro ao remover membro.');
+    }
   };
 
   // Group sessions by date for history view
@@ -279,15 +297,26 @@ export default function Groups() {
                     <Users size={18} />
                     {selectedGroup.name}
                   </span>
-                  <button
-                    id="btn-refresh-members"
-                    className="btn btn-secondary"
-                    style={{ padding: '0.375rem 0.75rem', fontSize: '0.8rem' }}
-                    onClick={() => loadMembers(selectedGroup.id, currentMonth)}
-                  >
-                    <RefreshCw size={13} />
-                    Atualizar
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      id="btn-add-member"
+                      className="btn btn-secondary"
+                      style={{ padding: '0.375rem 0.75rem', fontSize: '0.8rem' }}
+                      onClick={() => setShowAddMemberModal(true)}
+                    >
+                      <UserPlus size={13} />
+                      Adicionar Membro
+                    </button>
+                    <button
+                      id="btn-refresh-members"
+                      className="btn btn-secondary"
+                      style={{ padding: '0.375rem 0.75rem', fontSize: '0.8rem' }}
+                      onClick={() => loadMembers(selectedGroup.id, currentMonth)}
+                    >
+                      <RefreshCw size={13} />
+                      Atualizar
+                    </button>
+                  </div>
                 </div>
 
                 {loadingMembers ? (
@@ -306,6 +335,7 @@ export default function Groups() {
                           <th>Sessões</th>
                           <th style={{ textAlign: 'center' }}>Status {currentMonth.slice(0, 7)}</th>
                           <th>Tipo</th>
+                          <th style={{ width: '40px' }}></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -335,6 +365,15 @@ export default function Groups() {
                               <span className="text-small" style={{ textTransform: 'capitalize' }}>
                                 {m.payment_type === 'monthly' ? 'Mensal' : 'Por sessão'}
                               </span>
+                            </td>
+                            <td>
+                              <button
+                                className="icon-btn danger"
+                                title="Remover Membro"
+                                onClick={() => removeMember(m.patient_id, m.name)}
+                              >
+                                <UserMinus size={15} />
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -440,6 +479,20 @@ export default function Groups() {
             toast.success('Sessão registrada com sucesso!');
             loadMembers(selectedGroup.id, currentMonth);
             loadHistory(selectedGroup.id, currentMonth);
+          }}
+        />
+      )}
+
+      {/* Add Member Modal */}
+      {showAddMemberModal && selectedGroup && (
+        <AddMemberModal
+          group={selectedGroup}
+          currentMembers={members}
+          onClose={() => setShowAddMemberModal(false)}
+          onSuccess={() => {
+            setShowAddMemberModal(false);
+            toast.success('Membro adicionado com sucesso!');
+            loadMembers(selectedGroup.id, currentMonth);
           }}
         />
       )}
@@ -631,6 +684,133 @@ function RegisterSessionModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Add Member Modal ──────────────────────────────────────────────────────────
+
+function AddMemberModal({
+  group, currentMembers, onClose, onSuccess
+}: {
+  group: TherapyGroup;
+  currentMembers: GroupMember[];
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const toast = useToast();
+  const [patients, setPatients] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetchApi<{ data: any[] }>('/api/psychotherapy/patients?includeInactive=false');
+        setPatients(res.data);
+      } catch (err) {
+        toast.error('Erro ao carregar pacientes.');
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [toast]);
+
+  const currentIds = new Set(currentMembers.map(m => m.patient_id));
+  
+  const availablePatients = patients.filter(p => !currentIds.has(p.id));
+  const filteredPatients = availablePatients.filter(p => 
+    p.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleAdd = async (patientId: string) => {
+    try {
+      setSubmitting(true);
+      await fetchApi(`/api/psychotherapy/groups/${group.id}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ patientId })
+      });
+      onSuccess();
+    } catch (err) {
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Erro ao adicionar membro.');
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content animate-fade-in" style={{ maxWidth: '480px' }}>
+        <h2 className="text-h2 mb-4">Adicionar Membro — {group.name}</h2>
+
+        <div className="search-bar" style={{ marginBottom: '1rem', position: 'relative' }}>
+          <Search size={16} style={{ position: 'absolute', left: '10px', top: '10px', color: '#999' }} />
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Buscar paciente..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ paddingLeft: '36px' }}
+            autoFocus
+          />
+        </div>
+
+        <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border-light)', borderRadius: '6px' }}>
+          {loading ? (
+            <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Carregando...</div>
+          ) : availablePatients.length === 0 ? (
+            <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              Todos os pacientes já estão neste grupo.
+            </div>
+          ) : filteredPatients.length === 0 ? (
+            <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              Nenhum paciente encontrado na busca.
+            </div>
+          ) : (
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {filteredPatients.map(p => (
+                <li 
+                  key={p.id} 
+                  style={{ 
+                    padding: '0.75rem 1rem', 
+                    borderBottom: '1px solid var(--border-light)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}
+                >
+                  <div>
+                    <strong>{p.name}</strong>
+                    <div className="text-small" style={{ color: 'var(--text-secondary)' }}>
+                      {p.status === 'inativo' ? 'Inativo' : 'Ativo'}
+                    </div>
+                  </div>
+                  <button 
+                    className="btn btn-primary"
+                    style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
+                    onClick={() => handleAdd(p.id)}
+                    disabled={submitting}
+                  >
+                    Adicionar
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="flex justify-end mt-4">
+          <button
+            className="btn btn-secondary"
+            onClick={onClose}
+            disabled={submitting}
+          >
+            Fechar
+          </button>
+        </div>
       </div>
     </div>
   );

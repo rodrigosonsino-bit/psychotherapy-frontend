@@ -8,6 +8,7 @@ import { useToast } from '../context/ToastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { SkeletonTable } from '../components/Skeleton';
 import ErrorState from '../components/ErrorState';
+import { formatCurrency } from '../utils/formatters';
 import './Expenses.css';
 
 type ExpenseCategory = 'rent' | 'taxes' | 'software' | 'marketing' | 'other';
@@ -100,9 +101,6 @@ export default function Expenses() {
     }
   };
 
-  const formatCurrency = (cents: number) => {
-    return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  };
 
   const translateCategory = (cat: ExpenseCategory) => {
     const map: Record<ExpenseCategory, string> = {

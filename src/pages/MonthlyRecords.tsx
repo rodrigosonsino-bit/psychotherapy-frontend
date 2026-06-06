@@ -4,18 +4,8 @@ import { ChevronLeft, ChevronRight, RefreshCw, CheckCircle, Clock, MessageCircle
 import { fetchApi } from '../services/api';
 import type { MonthlyRecord, Patient, MonthResponse, PaginatedResponse } from '../types/api';
 
-// ── Modalidade unificada (espelho de Patients.tsx) ────────────────────────────
-const MODALIDADE_OPTIONS = [
-  { value: 'mensal-semanal',    label: 'Mensal (Semanal)',       status: 'weekly',   paymentType: 'monthly',     sessions: 4 },
-  { value: 'mensal-quinzenal',  label: 'Mensal (Quinzenal)',     status: 'biweekly', paymentType: 'monthly',     sessions: 2 },
-  { value: 'sessao-semanal',    label: 'Por Sessão (Semanal)',   status: 'weekly',   paymentType: 'per_session', sessions: 4 },
-  { value: 'sessao-quinzenal',  label: 'Por Sessão (Quinzenal)', status: 'biweekly', paymentType: 'per_session', sessions: 2 },
-  { value: 'avulsa',            label: 'Avulsa',                 status: 'one_off',  paymentType: 'per_session', sessions: 0 },
-] as const;
-
-function getModalidadeValue(status: string, paymentType: string | null): string {
-  return MODALIDADE_OPTIONS.find(o => o.status === status && o.paymentType === paymentType)?.value ?? 'sessao-semanal';
-}
+import { MODALIDADE_OPTIONS, getModalidadeValue } from '../constants/modalidade';
+import { formatCurrency } from '../utils/formatters';
 import { useToast } from '../context/ToastContext';
 import { SkeletonTable } from '../components/Skeleton';
 import ErrorState from '../components/ErrorState';
@@ -218,9 +208,6 @@ export default function MonthlyRecords() {
     }
   };
 
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
-  };
 
   const getExpectedAmount = (record: MonthlyRecord) => {
     if (record.paymentType === 'monthly') return record.sessionPriceCents || 0;

@@ -85,17 +85,11 @@ export default function Auth() {
     setError(null);
     try {
       setLoading(true);
-      await fetchApi('/auth/2fa/verify', {
+      const res = await fetchApi<AuthResponse>('/auth/2fa/verify', {
         method: 'POST',
         body: JSON.stringify({ token: totpCode }),
         headers: { Authorization: `Bearer ${tempToken}` }
       } as RequestInit);
-
-      // Faz login novamente para obter tokens definitivos
-      const res = await fetchApi<AuthResponse>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      });
 
       if (!res.requires2fa) {
         tokenStorage.setTokens(res.accessToken, res.refreshToken);

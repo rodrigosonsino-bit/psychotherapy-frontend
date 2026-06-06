@@ -10,26 +10,9 @@ import './Patients.css';
 
 const PAGE_SIZE = 20;
 
-// ── Modalidade unificada ───────────────────────────────────────────────────────
-const MODALIDADE_OPTIONS = [
-  { value: 'mensal-semanal',    label: 'Mensal (Semanal)',       status: 'weekly'   as const, paymentType: 'monthly'     as const },
-  { value: 'mensal-quinzenal',  label: 'Mensal (Quinzenal)',     status: 'biweekly' as const, paymentType: 'monthly'     as const },
-  { value: 'sessao-semanal',    label: 'Por Sessão (Semanal)',   status: 'weekly'   as const, paymentType: 'per_session' as const },
-  { value: 'sessao-quinzenal',  label: 'Por Sessão (Quinzenal)', status: 'biweekly' as const, paymentType: 'per_session' as const },
-  { value: 'avulsa',            label: 'Avulsa',                 status: 'one_off'  as const, paymentType: 'per_session' as const },
-] as const;
-
-type ModalidadeValue = typeof MODALIDADE_OPTIONS[number]['value'];
-
-function getModalidadeValue(status: string, paymentType: string | null): ModalidadeValue {
-  const found = MODALIDADE_OPTIONS.find(o => o.status === status && o.paymentType === paymentType);
-  return found ? found.value : 'sessao-semanal';
-}
-
-function getModalidadeLabel(status: string, paymentType: string | null): string {
-  if (status === 'inactive') return 'Inativo';
-  return MODALIDADE_OPTIONS.find(o => o.status === status && o.paymentType === paymentType)?.label ?? '—';
-}
+import { MODALIDADE_OPTIONS, getModalidadeValue, getModalidadeLabel } from '../constants/modalidade';
+import type { ModalidadeValue } from '../constants/modalidade';
+import { formatCurrency } from '../utils/formatters';
 
 export default function Patients() {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -111,10 +94,6 @@ export default function Patients() {
     }
   };
 
-  const formatCurrency = (cents: number | null) => {
-    if (cents === null || cents === undefined) return '-';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
-  };
 
   return (
     <div className="patients-page animate-fade-in">
@@ -187,7 +166,7 @@ export default function Patients() {
                         {getModalidadeLabel(p.status, p.paymentType ?? null)}
                       </span>
                     </td>
-                    <td>{formatCurrency(p.defaultSessionPriceCents)}</td>
+                    <td>{p.defaultSessionPriceCents != null ? formatCurrency(p.defaultSessionPriceCents) : '-'}</td>
                     <td>
                       <div className="flex gap-2">
                         <button className="btn-icon" title="Prontuário" onClick={() => setNotesPatient(p)}>

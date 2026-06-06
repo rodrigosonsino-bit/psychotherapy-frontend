@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { format } from 'date-fns';
 import { TrendingUp, TrendingDown, DollarSign, AlertCircle } from 'lucide-react';
 import { fetchApi } from '../services/api';
 import type { DashboardAnalytics } from '../types/api';
+import { formatCurrency } from '../utils/formatters';
 import Skeleton, { SkeletonCard } from '../components/Skeleton';
 import ErrorState from '../components/ErrorState';
 import {
@@ -41,11 +42,7 @@ export default function Dashboard() {
     loadAnalytics();
   }, [loadAnalytics]);
 
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
-  };
-
-  const formatChartData = () => {
+  const chartData = useMemo(() => {
     if (!analytics?.sixMonthsTrend) return [];
     const sorted = [...analytics.sixMonthsTrend].sort((a, b) => a.month.localeCompare(b.month));
     
@@ -54,7 +51,7 @@ export default function Dashboard() {
       Receitas: item.revenueCents / 100,
       Despesas: item.expensesCents / 100
     }));
-  };
+  }, [analytics?.sixMonthsTrend]);
 
   if (loading) {
     return (
@@ -151,7 +148,7 @@ export default function Dashboard() {
         <div style={{ width: '100%', height: 400 }}>
           <ResponsiveContainer>
             <BarChart
-              data={formatChartData()}
+              data={chartData}
               margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
-import { jsPDF } from 'jspdf';
 import { Printer, Plus } from 'lucide-react';
 import { fetchApi } from '../services/api';
 import type { Receipt, Patient, TenantProfile, PaginatedResponse } from '../types/api';
 import { useToast } from '../context/ToastContext';
 import { SkeletonTable } from '../components/Skeleton';
 import ErrorState from '../components/ErrorState';
+import { formatCurrency } from '../utils/formatters';
 
 export default function Receipts() {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -43,11 +43,8 @@ export default function Receipts() {
     loadData();
   }, [loadData]);
 
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
-  };
 
-  const handlePrint = (receipt: Receipt) => {
+  const handlePrint = async (receipt: Receipt) => {
     if (!profile) {
       toast.error('Perfil do psicólogo não carregado. Por favor, preencha seus dados na aba "Meu Perfil" primeiro.');
       return;
@@ -58,6 +55,8 @@ export default function Receipts() {
       toast.error('Paciente não encontrado.');
       return;
     }
+
+    const { jsPDF } = await import('jspdf');
 
     const doc = new jsPDF({
       orientation: 'portrait',

@@ -90,6 +90,11 @@ button {
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  min-width: 0;
+}
+
+.main-content > * {
+  min-width: 0;
 }
 
 /* Typography Utilities */
@@ -289,7 +294,12 @@ button {
 }
 
 /* Responsive Table and Faturamento tweaks */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
+  .main-content {
+    padding: 1.5rem 1rem;
+    gap: 1.5rem;
+  }
+
   .table th,
   .table td {
     padding: 0.5rem 0.75rem;

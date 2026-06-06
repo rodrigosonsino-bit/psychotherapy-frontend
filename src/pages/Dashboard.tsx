@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { format } from 'date-fns';
 import { TrendingUp, TrendingDown, DollarSign, AlertCircle } from 'lucide-react';
 import { fetchApi } from '../services/api';
-import type { DashboardAnalytics } from '../types/api';
-import { formatCurrency } from '../utils/formatters';
+import type { DashboardAnalytics, Appointment, Patient, PaginatedResponse } from '../types/api';
+import { formatCurrency, translateAppointmentStatus } from '../utils/formatters';
 import Skeleton, { SkeletonCard } from '../components/Skeleton';
+import { startOfDay, endOfDay } from 'date-fns';
 import ErrorState from '../components/ErrorState';
 import {
   BarChart,
@@ -20,6 +21,8 @@ import './Dashboard.css';
 
 export default function Dashboard() {
   const [analytics, setAnalytics] = useState<DashboardAnalytics | null>(null);
+  const [todayAppointments, setTodayAppointments] = useState<Appointment[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const currentMonth = format(new Date(), 'yyyy-MM');
@@ -28,8 +31,23 @@ export default function Dashboard() {
     try {
       setLoading(true);
       setError(false);
-      const data = await fetchApi<DashboardAnalytics>(`/api/psychotherapy/analytics/dashboard?month=${currentMonth}`);
+
+      const start = startOfDay(new Date()).toISOString();
+      const end = endOfDay(new Date()).toISOString();
+
+      const [data, apptRes, patRes] = await Promise.all([
+        fetchApi<DashboardAnalytics>(`/api/psychotherapy/analytics/dashboard?month=${currentMonth}`),
+        fetchApi<PaginatedResponse<Appointment>>(`/api/psychotherapy/appointments?start=${start}&end=${end}&limit=100`),
+        fetchApi<PaginatedResponse<Patient>>('/api/psychotherapy/patients?limit=100')
+      ]);
+
       setAnalytics(data);
+      
+      // Filter out canceled/no_show to focus on active schedule? Or show them crossed out? Let's show all and style by status.
+      // Sort by time
+      const sortedAppts = apptRes.data.sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+      setTodayAppointments(sortedAppts);
+      setPatients(patRes.data);
     } catch (err) {
       console.error('Erro ao carregar analytics', err);
       setError(true);
@@ -143,8 +161,69 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="chart-section">
-        <h2>Evolução Financeira (Últimos 6 meses)</h2>
+      <div className="dashboard-grid mt-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))' }}>
+        <div className="card">
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-h3" style={{ margin: 0 }}>Sessões de Hoje</h2>
+            <span className="badge badge-primary">{todayAppointments.length}</span>
+          </div>
+
+          {todayAppointments.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)' }}>
+              <p>Nenhuma sessão agendada para hoje.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {todayAppointments.map(appt => {
+                const patName = patients.find(p => p.id === appt.patientId)?.name || 'Paciente desconhecido';
+                const time = format(new Date(appt.scheduledAt), 'HH:mm');
+                
+                let statusColor = 'var(--text-primary)';
+                let statusBg = 'var(--bg-surface)';
+                let borderLeft = '4px solid var(--border-color)';
+                
+                if (appt.status === 'canceled' || appt.status === 'no_show') {
+                  statusColor = 'var(--text-muted)';
+                  borderLeft = '4px solid var(--status-danger)';
+                } else if (appt.status === 'attended') {
+                  borderLeft = '4px solid var(--status-success)';
+                } else if (appt.status === 'confirmed') {
+                  borderLeft = '4px solid var(--status-info)';
+                } else {
+                  borderLeft = '4px solid var(--status-warning)';
+                }
+
+                return (
+                  <div key={appt.id} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '0.75rem 1rem',
+                    backgroundColor: statusBg,
+                    border: '1px solid var(--border-color)',
+                    borderLeft,
+                    borderRadius: 'var(--radius-md)',
+                    color: statusColor,
+                    opacity: (appt.status === 'canceled' || appt.status === 'no_show') ? 0.6 : 1
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{time}</div>
+                      <div style={{ fontSize: '0.875rem' }}>{patName}</div>
+                    </div>
+                    <div>
+                      <span className="badge" style={{ fontSize: '0.7rem' }}>
+                        {translateAppointmentStatus(appt.status)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <h2 className="text-h3 mb-4">Evolução Financeira (Últimos 6 meses)</h2>
         <div style={{ width: '100%', height: 400 }}>
           <ResponsiveContainer>
             <BarChart
@@ -174,6 +253,7 @@ export default function Dashboard() {
               <Bar dataKey="Despesas" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={50} />
             </BarChart>
           </ResponsiveContainer>
+        </div>
         </div>
       </div>
     </div>

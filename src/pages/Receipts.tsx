@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
-import { Printer, Plus } from 'lucide-react';
+import { Printer, Plus, Download } from 'lucide-react';
 import { fetchApi } from '../services/api';
 import type { Receipt, Patient, TenantProfile, PaginatedResponse } from '../types/api';
 import { useToast } from '../context/ToastContext';
@@ -43,6 +43,20 @@ export default function Receipts() {
     loadData();
   }, [loadData]);
 
+  const handleExport = async () => {
+    try {
+      const blob = await fetchApi<Blob>('/api/psychotherapy/export/receipts', {
+        headers: { Accept: 'text/csv' },
+        responseType: 'blob'
+      });
+      const url = URL.createObjectURL(new Blob([blob as any], { type: 'text/csv' }));
+      Object.assign(document.createElement('a'), { href: url, download: 'recibos.csv' }).click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao exportar recibos.');
+    }
+  };
 
   const handlePrint = async (receipt: Receipt) => {
     if (!profile) {
@@ -213,9 +227,18 @@ export default function Receipts() {
           <h1 className="text-h1">Recibos</h1>
           <p className="text-body">Histórico e emissão de recibos para pacientes</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-          <Plus size={18} /> Emitir Recibo
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleExport}
+            className="btn btn-secondary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}
+          >
+            <Download size={16} /> CSV
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+            <Plus size={18} /> Emitir Recibo
+          </button>
+        </div>
       </div>
 
       {loading ? (

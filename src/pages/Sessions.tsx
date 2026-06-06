@@ -3,7 +3,7 @@ import { fetchApi } from '../services/api';
 import type { Patient, Session, PaginatedResponse } from '../types/api';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Trash2, Download } from 'lucide-react';
+import { Trash2, Download, Plus, Edit2 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { SkeletonTable } from '../components/Skeleton';
@@ -17,17 +17,8 @@ export default function Sessions() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const getLocalDatetimeString = () => {
-    const now = new Date();
-    return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().substring(0, 16);
-  };
-
-  // Form state
-  const [patientId, setPatientId] = useState('');
-  const [date, setDate] = useState(getLocalDatetimeString()); // YYYY-MM-DDThh:mm local time
-  const [status, setStatus] = useState<SessionStatus>('attended');
-  const [notes, setNotes] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [currentSession, setCurrentSession] = useState<Partial<Session> | null>(null);
 
   // Confirmation dialog state
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: string | null }>({
@@ -60,28 +51,9 @@ export default function Sessions() {
     loadData();
   }, [loadData]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      setSubmitting(true);
-      await fetchApi('/api/psychotherapy/sessions', {
-        method: 'POST',
-        body: JSON.stringify({
-          patientId,
-          date: new Date(date).toISOString(),
-          status,
-          notes: notes || null
-        })
-      });
-      toast.success('Sessão registrada com sucesso.');
-      setNotes('');
-      await loadData();
-    } catch (err) {
-      console.error(err);
-      toast.error((err instanceof Error ? err.message : String(err)) || 'Falha ao registrar sessão.');
-    } finally {
-      setSubmitting(false);
-    }
+  const openModal = (session: Partial<Session> | null = null) => {
+    setCurrentSession(session);
+    setShowModal(true);
   };
 
   const askDeleteSession = (id: string) => {
@@ -136,78 +108,24 @@ export default function Sessions() {
 
   return (
     <div className="sessions-container animate-fade-in">
-      <div className="sessions-header flex justify-between items-center">
-        <h1 className="text-h1">Diário de Sessões</h1>
-        <button
-          onClick={handleExport}
-          className="btn btn-secondary"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}
-        >
-          <Download size={16} /> CSV
-        </button>
+      <div className="sessions-header flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-h1">Diário de Sessões</h1>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={handleExport}
+            className="btn btn-secondary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}
+          >
+            <Download size={16} /> CSV
+          </button>
+          <button className="btn btn-primary" onClick={() => openModal()}>
+            <Plus size={18} /> Nova Sessão
+          </button>
+        </div>
       </div>
 
-      <form className="new-session-form" onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label className="form-label">Paciente</label>
-          <select 
-            required 
-            value={patientId} 
-            onChange={e => setPatientId(e.target.value)} 
-            className="form-control"
-            disabled={submitting}
-          >
-            <option value="">Selecione o paciente...</option>
-            {patients.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        </div>
-        
-        <div className="form-group">
-          <label className="form-label">Data e Hora</label>
-          <input 
-            type="datetime-local" 
-            required 
-            value={date} 
-            onChange={e => setDate(e.target.value)} 
-            className="form-control"
-            disabled={submitting}
-          />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Status</label>
-          <select 
-            required 
-            value={status} 
-            onChange={e => setStatus(e.target.value as SessionStatus)} 
-            className="form-control"
-            disabled={submitting}
-          >
-            <option value="attended">Presente</option>
-            <option value="justified_absence">Falta Justificada (Não cobra)</option>
-            <option value="unjustified_absence">Falta Injustificada (Cobra)</option>
-            <option value="canceled">Cancelado pelo Terapeuta</option>
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Anotações (opcional)</label>
-          <input 
-            type="text" 
-            value={notes} 
-            onChange={e => setNotes(e.target.value)} 
-            className="form-control" 
-            placeholder="Ex: Trânsito, atestado..." 
-            disabled={submitting}
-          />
-        </div>
-
-        <button type="submit" className="btn btn-primary" disabled={!patientId || submitting}>
-          {submitting ? 'Registrando...' : 'Registrar Sessão'}
-        </button>
-      </form>
 
       {loading ? (
         <SkeletonTable rows={5} cols={4} />
@@ -233,9 +151,14 @@ export default function Sessions() {
                 </div>
                 <div className="session-status">
                   {getStatusBadge(session.status)}
-                  <button className="btn btn-icon btn-danger" onClick={() => askDeleteSession(session.id)}>
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="flex gap-2">
+                    <button className="btn-icon" onClick={() => openModal(session)}>
+                      <Edit2 size={16} />
+                    </button>
+                    <button className="btn-icon text-danger" onClick={() => askDeleteSession(session.id)}>
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))
@@ -253,6 +176,139 @@ export default function Sessions() {
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete({ open: false, id: null })}
       />
+
+      {showModal && (
+        <SessionModal
+          session={currentSession}
+          patients={patients}
+          onClose={() => setShowModal(false)}
+          onSave={() => loadData()}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── SessionModal ──────────────────────────────────────────────────────────────
+
+interface SessionModalProps {
+  session: Partial<Session> | null;
+  patients: Patient[];
+  onClose: () => void;
+  onSave: () => void;
+}
+
+function SessionModal({ session, patients, onClose, onSave }: SessionModalProps) {
+  const getLocalDatetimeString = (isoString?: string) => {
+    const d = isoString ? new Date(isoString) : new Date();
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().substring(0, 16);
+  };
+
+  const [formData, setFormData] = useState({
+    id: session?.id,
+    patientId: session?.patientId || '',
+    date: getLocalDatetimeString(session?.date),
+    status: (session?.status || 'attended') as SessionStatus,
+    notes: session?.notes || ''
+  });
+
+  const [submitting, setSubmitting] = useState(false);
+  const toast = useToast();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setSubmitting(true);
+      await fetchApi('/api/psychotherapy/sessions', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: formData.id,
+          patientId: formData.patientId,
+          date: new Date(formData.date).toISOString(),
+          status: formData.status,
+          notes: formData.notes || null
+        })
+      });
+      toast.success(session?.id ? 'Sessão atualizada com sucesso.' : 'Sessão registrada com sucesso.');
+      onSave();
+      onClose();
+    } catch (err) {
+      console.error(err);
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Falha ao salvar sessão.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content animate-fade-in" style={{ maxWidth: '500px' }}>
+        <h2 className="text-h2 mb-4">{session?.id ? 'Editar Sessão' : 'Nova Sessão'}</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Paciente *</label>
+            <select 
+              required 
+              value={formData.patientId} 
+              onChange={e => setFormData({ ...formData, patientId: e.target.value })} 
+              className="form-control"
+              disabled={submitting}
+            >
+              <option value="">Selecione o paciente...</option>
+              {patients.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div className="form-group">
+            <label className="form-label">Data e Hora *</label>
+            <input 
+              type="datetime-local" 
+              required 
+              value={formData.date} 
+              onChange={e => setFormData({ ...formData, date: e.target.value })} 
+              className="form-control"
+              disabled={submitting}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Status *</label>
+            <select 
+              required 
+              value={formData.status} 
+              onChange={e => setFormData({ ...formData, status: e.target.value as SessionStatus })} 
+              className="form-control"
+              disabled={submitting}
+            >
+              <option value="attended">Presente</option>
+              <option value="justified_absence">Falta Justificada (Não cobra)</option>
+              <option value="unjustified_absence">Falta Injustificada (Cobra)</option>
+              <option value="canceled">Cancelado pelo Terapeuta</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Anotações (opcional)</label>
+            <input 
+              type="text" 
+              value={formData.notes} 
+              onChange={e => setFormData({ ...formData, notes: e.target.value })} 
+              className="form-control" 
+              placeholder="Ex: Trânsito, atestado..." 
+              disabled={submitting}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={submitting}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={!formData.patientId || submitting}>
+              {submitting ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

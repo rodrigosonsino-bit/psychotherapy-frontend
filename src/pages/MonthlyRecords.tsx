@@ -20,6 +20,7 @@ export default function MonthlyRecords() {
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [reminderText, setReminderText] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'partial' | 'paid'>('all');
 
   const monthStr = format(currentDate, 'yyyy-MM');
   const displayMonth = format(currentDate, 'MM/yyyy');
@@ -215,6 +216,11 @@ export default function MonthlyRecords() {
     return (record.sessionPriceCents || 0) * billableSessions;
   };
 
+  const getReceivedAmount = (record: MonthlyRecord) => {
+    if (record.paymentType === 'monthly') return record.paymentStatus === 'paid' ? (record.sessionPriceCents || 0) : 0;
+    return (record.sessionPriceCents || 0) * (record.paidSessions || 0);
+  };
+
   const handleSendReminder = (record: MonthlyRecord, patient: Patient) => {
     const amountFormatted = formatCurrency(getExpectedAmount(record));
     const sessionsText = record.paymentType === 'monthly' ? '' : ` referente a ${record.expectedSessions} sessões`;
@@ -247,6 +253,15 @@ export default function MonthlyRecords() {
       toast.error('Erro ao exportar faturamento.');
     }
   };
+
+  const filteredRecords = records.filter(r => {
+    if (statusFilter === 'all') return true;
+    return r.paymentStatus === statusFilter;
+  });
+
+  const totalExpected = filteredRecords.reduce((acc, r) => acc + getExpectedAmount(r), 0);
+  const totalReceived = filteredRecords.reduce((acc, r) => acc + getReceivedAmount(r), 0);
+  const totalPending = totalExpected - totalReceived;
 
   return (
     <div className="animate-fade-in">
@@ -286,6 +301,23 @@ export default function MonthlyRecords() {
         </div>
       </div>
 
+      <div className="flex justify-end mb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-small text-muted font-medium">Filtrar:</span>
+          <select 
+            className="form-control" 
+            style={{ width: 'auto', padding: '0.25rem 2rem 0.25rem 0.75rem', height: '32px', fontSize: '0.875rem' }}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
+          >
+            <option value="all">Todos os Status</option>
+            <option value="pending">Pendentes</option>
+            <option value="partial">Parciais</option>
+            <option value="paid">Pagos</option>
+          </select>
+        </div>
+      </div>
+
       {loading ? (
         <SkeletonTable rows={6} cols={5} />
       ) : error ? (
@@ -314,7 +346,7 @@ export default function MonthlyRecords() {
               </tr>
             </thead>
             <tbody>
-              {records.map(r => {
+              {filteredRecords.map(r => {
                 const patient = patients.find(p => p.id === r.patientId);
                 return (
                   <tr key={r.id}>
@@ -466,6 +498,16 @@ export default function MonthlyRecords() {
                 );
               })}
             </tbody>
+            <tfoot>
+              <tr style={{ backgroundColor: 'var(--bg-surface-hover)' }}>
+                <td colSpan={2} style={{ textAlign: 'right', fontWeight: 'bold' }}>Totais (Exibe os valores filtrados):</td>
+                <td style={{ fontWeight: 'bold' }}>{formatCurrency(totalExpected)}</td>
+                <td style={{ fontWeight: 'bold' }}>
+                  <span className="text-success" title="Recebido">{formatCurrency(totalReceived)}</span> / <span className="text-danger" title="Pendente">{formatCurrency(totalPending)}</span>
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}

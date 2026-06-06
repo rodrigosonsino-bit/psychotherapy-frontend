@@ -12,7 +12,8 @@ export default function ProfileSettings() {
     fullName: '',
     document: '',
     professionalId: '',
-    address: ''
+    address: '',
+    twoFactorEnabled: false
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -29,7 +30,8 @@ export default function ProfileSettings() {
         fullName: data.fullName || '',
         document: data.document || '',
         professionalId: data.professionalId || '',
-        address: data.address || ''
+        address: data.address || '',
+        twoFactorEnabled: data.twoFactorEnabled || false
       });
     } catch (err) {
       console.error(err);
@@ -104,7 +106,10 @@ export default function ProfileSettings() {
       </div>
 
       <GoogleCalendarSection />
-      <TwoFactorSection />
+      <TwoFactorSection 
+        enabled={formData.twoFactorEnabled} 
+        onStatusChange={(status) => setFormData(prev => ({ ...prev, twoFactorEnabled: status }))} 
+      />
 
       <div className="card profile-card mt-4">
         <form onSubmit={handleSubmit} className="profile-form">
@@ -333,7 +338,7 @@ function GoogleCalendarSection() {
 
 // ── 2FA Section ───────────────────────────────────────────────────────────────
 
-function TwoFactorSection() {
+function TwoFactorSection({ enabled, onStatusChange }: { enabled: boolean, onStatusChange: (status: boolean) => void }) {
   const [setup, setSetup] = useState<TotpSetupResult | null>(null);
   const [step, setStep] = useState<'idle' | 'setup' | 'disable'>('idle');
   const [token, setToken] = useState('');
@@ -361,6 +366,7 @@ function TwoFactorSection() {
       toast.success('2FA ativado com sucesso! Guarde seus códigos de backup.');
       setStep('idle');
       setToken('');
+      onStatusChange(true);
     } catch (err) {
       toast.error((err instanceof Error ? err.message : String(err)) || 'Código inválido.');
     } finally {
@@ -377,6 +383,7 @@ function TwoFactorSection() {
       setStep('idle');
       setToken('');
       setSetup(null);
+      onStatusChange(false);
     } catch (err) {
       toast.error((err instanceof Error ? err.message : String(err)) || 'Código inválido.');
     } finally {
@@ -402,12 +409,15 @@ function TwoFactorSection() {
             Adicione uma camada extra de segurança usando um aplicativo como Google Authenticator ou Authy.
           </p>
           <div className="flex gap-2">
-            <button className="btn btn-primary" onClick={handleSetup} disabled={submitting}>
-              <ShieldCheck size={16} /> Ativar 2FA
-            </button>
-            <button className="btn btn-secondary" onClick={() => setStep('disable')}>
-              <ShieldOff size={16} /> Desativar
-            </button>
+            {!enabled ? (
+              <button className="btn btn-primary" onClick={handleSetup} disabled={submitting}>
+                <ShieldCheck size={16} /> Ativar 2FA
+              </button>
+            ) : (
+              <button className="btn btn-secondary" onClick={() => setStep('disable')}>
+                <ShieldOff size={16} /> Desativar
+              </button>
+            )}
           </div>
         </div>
       )}

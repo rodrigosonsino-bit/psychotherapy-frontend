@@ -98,6 +98,7 @@ export interface TenantProfile {
   document: string | null;
   professionalId: string | null;
   address: string | null;
+  twoFactorEnabled?: boolean;
 }
 
 export interface DashboardAnalytics {

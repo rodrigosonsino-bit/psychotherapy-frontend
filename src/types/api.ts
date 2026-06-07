@@ -151,6 +151,7 @@ export interface Appointment {
   googleEventUrl: string | null;
   confirmToken: string | null;
   confirmedAt: string | null;
+  parentId: string | null;
   createdAt: string;
   updatedAt: string;
 }

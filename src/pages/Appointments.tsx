@@ -43,6 +43,7 @@ export default function Appointments() {
   const [showModal, setShowModal] = useState(false);
   const [editAppointment, setEditAppointment] = useState<Appointment | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const [deleteSeriesDialog, setDeleteSeriesDialog] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
   const [viewType, setViewType] = useState<'all' | 'day' | 'week' | 'month'>('week');
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [prefilledDate, setPrefilledDate] = useState<string | null>(null);
@@ -125,17 +126,28 @@ export default function Appointments() {
     }
   };
 
-  const handleDelete = async () => {
-    const id = confirmDelete.id;
+  const openDeleteDialog = (id: string) => {
+    const appt = appointments.find(a => a.id === id);
+    const isSeries = appt ? (appt.parentId !== null || appt.recurrence !== 'none') : false;
+    if (isSeries) {
+      setDeleteSeriesDialog({ open: true, id });
+    } else {
+      setConfirmDelete({ open: true, id });
+    }
+  };
+
+  const handleDelete = async (mode: 'single' | 'all' = 'single') => {
+    const id = confirmDelete.id || deleteSeriesDialog.id;
     if (!id) return;
     try {
-      await fetchApi(`/api/psychotherapy/appointments/${id}`, { method: 'DELETE' });
-      toast.success('Agendamento excluído.');
+      await fetchApi(`/api/psychotherapy/appointments/${id}?mode=${mode}`, { method: 'DELETE' });
+      toast.success(mode === 'all' ? 'Série excluída.' : 'Agendamento excluído.');
       await loadAppointments(page, filterPatientId, viewType, currentDate);
     } catch (err) {
       toast.error((err instanceof Error ? err.message : String(err)) || 'Falha ao excluir.');
     } finally {
       setConfirmDelete({ open: false, id: null });
+      setDeleteSeriesDialog({ open: false, id: null });
     }
   };
 
@@ -396,7 +408,7 @@ export default function Appointments() {
                         <button className="btn-icon" title="Editar" onClick={() => { setEditAppointment(a); setShowModal(true); }}>
                           <Edit2 size={14} />
                         </button>
-                        <button className="btn-icon text-danger" title="Excluir" onClick={() => setConfirmDelete({ open: true, id: a.id })}>
+                        <button className="btn-icon text-danger" title="Excluir" onClick={() => openDeleteDialog(a.id)}>
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -438,7 +450,7 @@ export default function Appointments() {
           onSlotClick={handleSlotClick}
           onStatusUpdate={handleStatusUpdate}
           onEdit={a => { setEditAppointment(a); setShowModal(true); }}
-          onDelete={id => setConfirmDelete({ open: true, id })}
+          onDelete={id => openDeleteDialog(id)}
           onDayClick={date => { setCurrentDate(date); setViewType('day'); }}
         />
       )}
@@ -458,9 +470,54 @@ export default function Appointments() {
         title="Excluir agendamento"
         message="Confirma a exclusão deste agendamento?"
         confirmLabel="Excluir" cancelLabel="Cancelar" variant="danger"
-        onConfirm={handleDelete}
+        onConfirm={() => handleDelete('single')}
         onCancel={() => setConfirmDelete({ open: false, id: null })}
       />
+
+      {deleteSeriesDialog.open && (
+        <div className="confirm-overlay" onClick={() => setDeleteSeriesDialog({ open: false, id: null })}>
+          <div className="confirm-content animate-fade-in" onClick={e => e.stopPropagation()}>
+            <button type="button" className="confirm-close-btn" onClick={() => setDeleteSeriesDialog({ open: false, id: null })}>
+              <X size={18} />
+            </button>
+            <div className="confirm-header">
+              <div className="confirm-icon-wrapper wrapper-danger">
+                <Trash2 className="confirm-icon icon-danger" size={28} />
+              </div>
+              <div className="confirm-title-wrapper">
+                <h3>Excluir agendamento</h3>
+                <p>Este agendamento faz parte de uma série recorrente. O que deseja excluir?</p>
+              </div>
+            </div>
+            <div className="confirm-actions" style={{ flexDirection: 'column', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-danger confirm-submit-btn"
+                style={{ width: '100%' }}
+                onClick={() => handleDelete('all')}
+              >
+                Excluir toda a série
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ width: '100%', borderColor: 'var(--danger)', color: 'var(--danger)' }}
+                onClick={() => handleDelete('single')}
+              >
+                Excluir somente este
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ width: '100%' }}
+                onClick={() => setDeleteSeriesDialog({ open: false, id: null })}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

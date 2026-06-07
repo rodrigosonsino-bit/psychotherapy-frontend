@@ -371,19 +371,19 @@ export default function MonthlyRecords() {
                       )}
                     </td>
                     <td>
-                      {r.paymentType === 'monthly' || r.expectedSessions === 0 ? (
-                        <span style={{ opacity: 0.5 }}>-</span>
+                      {r.expectedSessions === 0 ? (
+                        <span className="text-small" style={{ opacity: 0.6 }}>Sem sessões no mês</span>
                       ) : (
                         <div className="sessions-counter-container" style={{ userSelect: 'none' }}>
                           <button
                             className="btn btn-secondary"
-                            style={{ 
-                              padding: '2px 8px', 
-                              minWidth: '24px', 
-                              height: '24px', 
-                              display: 'inline-flex', 
-                              alignItems: 'center', 
-                              justifyContent: 'center' 
+                            style={{
+                              padding: '2px 8px',
+                              minWidth: '24px',
+                              height: '24px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
                             }}
                             onClick={() => updatePaidSessions(r, r.paidSessions - 1)}
                             disabled={r.paidSessions <= 0}
@@ -395,13 +395,13 @@ export default function MonthlyRecords() {
                           </span>
                           <button
                             className="btn btn-secondary"
-                            style={{ 
-                              padding: '2px 8px', 
-                              minWidth: '24px', 
-                              height: '24px', 
-                              display: 'inline-flex', 
-                              alignItems: 'center', 
-                              justifyContent: 'center' 
+                            style={{
+                              padding: '2px 8px',
+                              minWidth: '24px',
+                              height: '24px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
                             }}
                             onClick={() => updatePaidSessions(r, r.paidSessions + 1)}
                             disabled={r.paidSessions >= Math.max(0, r.expectedSessions - r.absences)}
@@ -451,7 +451,7 @@ export default function MonthlyRecords() {
                       </div>
                     </td>
                     <td>
-                      {r.expectedSessions === 0 ? (
+                      {r.paymentType === 'monthly' && r.expectedSessions === 0 ? (
                         <span className="badge" style={{ backgroundColor: 'rgba(148, 163, 184, 0.1)', color: 'var(--text-secondary)' }}>
                           Sem Sessões
                         </span>
@@ -463,7 +463,7 @@ export default function MonthlyRecords() {
                     </td>
                     <td>
                       <div className="flex gap-2 actions-cell">
-                        {r.expectedSessions > 0 && (
+                        {(r.expectedSessions > 0 || r.paymentType === 'per_session') && (
                           r.paymentStatus !== 'paid' ? (
                             <button 
                               className="btn btn-secondary" 
@@ -482,7 +482,7 @@ export default function MonthlyRecords() {
                             </button>
                           )
                         )}
-                        {patient?.phone && r.expectedSessions > 0 && r.paymentStatus !== 'paid' && (
+                        {patient?.phone && (r.expectedSessions > 0 || r.paymentType === 'per_session') && r.paymentStatus !== 'paid' && (
                           <button 
                             className="btn btn-secondary"
                             style={{ padding: '0.25rem 0.75rem', fontSize: '0.75rem', borderColor: '#10b981' }}

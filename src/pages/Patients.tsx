@@ -283,6 +283,21 @@ function PatientModal({ patientToEdit, onClose, onSave }: PatientModalProps) {
     email: patientToEdit?.email || '',
     reminderChannel: patientToEdit?.reminderChannel || 'whatsapp' as ReminderChannel,
   });
+
+  useEffect(() => {
+    setFormData({
+      name: patientToEdit?.name || '',
+      fullName: patientToEdit?.fullName || '',
+      modalidade: patientToEdit ? getModalidadeValue(patientToEdit.status, patientToEdit.paymentType) : 'sessao-semanal' as ModalidadeValue,
+      isInactive: patientToEdit ? patientToEdit.status === 'inactive' : false,
+      defaultSessionPriceCents: patientToEdit?.defaultSessionPriceCents ? String(patientToEdit.defaultSessionPriceCents / 100) : '',
+      document: patientToEdit?.document || '',
+      phone: patientToEdit?.phone || '',
+      email: patientToEdit?.email || '',
+      reminderChannel: patientToEdit?.reminderChannel || 'whatsapp' as ReminderChannel,
+    });
+  }, [patientToEdit]);
+
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
 

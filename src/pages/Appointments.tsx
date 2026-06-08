@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Edit2, ChevronLeft, ChevronRight, Check, X, Clock, Link2, CalendarCheck } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronLeft, ChevronRight, Check, X, Clock, Link2, CalendarCheck, CheckCircle2, UserX, XCircle, Ban } from 'lucide-react';
 import { fetchApi } from '../services/api';
 import type { Appointment, AppointmentStatus, Patient, PaginatedResponse } from '../types/api';
 import { useToast } from '../context/ToastContext';
@@ -125,6 +125,11 @@ export default function Appointments() {
       toast.error((err instanceof Error ? err.message : String(err)) || 'Falha ao atualizar status.');
     }
   };
+
+  // Retorna true se o agendamento já passou e ainda está pendente de desfecho
+  const needsOutcome = (a: Appointment) =>
+    new Date(a.scheduledAt) < new Date() &&
+    (a.status === 'scheduled' || a.status === 'confirmed');
 
   const openDeleteDialog = (id: string) => {
     const appt = appointments.find(a => a.id === id);
@@ -368,30 +373,61 @@ export default function Appointments() {
                       </span>
                     </td>
                     <td>
-                      <div className="flex gap-1">
-                        {a.status === 'scheduled' && (
+                      <div className="flex gap-1 items-center flex-wrap">
+                        {needsOutcome(a) ? (
+                          /* ── Sessão passada pendente: botões de desfecho rápido ── */
                           <>
-                            <button className="btn-icon" title="Confirmar" onClick={() => handleStatusUpdate(a.id, 'confirmed')}>
-                              <Check size={14} style={{ color: 'var(--status-success)' }} />
+                            <button
+                              className="btn-icon"
+                              title="Sessão realizada"
+                              style={{ color: 'var(--status-success)' }}
+                              onClick={() => handleStatusUpdate(a.id, 'attended')}
+                            >
+                              <CheckCircle2 size={16} />
                             </button>
-                            <button className="btn-icon" title="Cancelar" onClick={() => handleStatusUpdate(a.id, 'canceled')}>
-                              <X size={14} style={{ color: 'var(--status-danger)' }} />
+                            <button
+                              className="btn-icon"
+                              title="Paciente faltou (cobrar)"
+                              style={{ color: '#f59e0b' }}
+                              onClick={() => handleStatusUpdate(a.id, 'no_show')}
+                            >
+                              <UserX size={16} />
+                            </button>
+                            <button
+                              className="btn-icon"
+                              title="Faltou / Remarcou (não cobrar)"
+                              style={{ color: 'var(--text-muted)' }}
+                              onClick={() => handleStatusUpdate(a.id, 'canceled')}
+                            >
+                              <XCircle size={16} />
+                            </button>
+                            <button
+                              className="btn-icon"
+                              title="Cancelado pelo terapeuta"
+                              style={{ color: 'var(--status-danger)' }}
+                              onClick={() => handleStatusUpdate(a.id, 'canceled')}
+                            >
+                              <Ban size={16} />
                             </button>
                           </>
-                        )}
-                        {(a.status === 'scheduled' || a.status === 'confirmed') && (
-                          <button className="btn-icon" title="Marcar como realizado" onClick={() => handleStatusUpdate(a.id, 'attended')}>
-                            ✓
-                          </button>
-                        )}
-                        {a.confirmToken && (
-                          <button
-                            className="btn-icon"
-                            title="Copiar link de confirmação para o paciente"
-                            onClick={() => copyConfirmLink(a.confirmToken!)}
-                          >
-                            <Link2 size={14} />
-                          </button>
+                        ) : (
+                          /* ── Sessão futura ou já com desfecho: ações padrão ── */
+                          <>
+                            {a.status === 'scheduled' && (
+                              <button className="btn-icon" title="Confirmar presença" onClick={() => handleStatusUpdate(a.id, 'confirmed')}>
+                                <Check size={14} style={{ color: 'var(--status-success)' }} />
+                              </button>
+                            )}
+                            {a.confirmToken && (
+                              <button
+                                className="btn-icon"
+                                title="Copiar link de confirmação para o paciente"
+                                onClick={() => copyConfirmLink(a.confirmToken!)}
+                              >
+                                <Link2 size={14} />
+                              </button>
+                            )}
+                          </>
                         )}
                         {a.googleEventUrl && (
                           <a

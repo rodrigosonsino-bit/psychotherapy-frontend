@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Check, Edit2, Trash2, X, CheckCircle } from 'lucide-react';
+import { Check, Edit2, Trash2, X, CheckCircle2, UserX, XCircle, Ban } from 'lucide-react';
 import type { Appointment, AppointmentStatus } from '../../types/api';
 import type { PositionedAppointment } from './calendarUtils';
 import { topPx, heightPx } from './calendarUtils';
@@ -25,6 +25,8 @@ export default function AppointmentChip({ appointment, patientName, onStatusUpda
   const popoverRef = useRef<HTMLDivElement>(null);
 
   const isShort = appointment.durationMinutes < 40;
+  const isPast = new Date(appointment.scheduledAt) < new Date();
+  const needsOutcome = isPast && (appointment.status === 'scheduled' || appointment.status === 'confirmed');
   const tPx = topPx(appointment.scheduledAt);
   const hPx = heightPx(appointment.durationMinutes);
   
@@ -91,15 +93,39 @@ export default function AppointmentChip({ appointment, patientName, onStatusUpda
           <div className="popover-header">
             {timeStr} — {patientName}
           </div>
-          <button className="popover-btn" onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'confirmed'))}>
-            <Check size={14} /> Confirmar
-          </button>
-          <button className="popover-btn" onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'attended'))}>
-            <CheckCircle size={14} /> Marcar Realizado
-          </button>
-          <button className="popover-btn danger" onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'canceled'))}>
-            <X size={14} /> Cancelar
-          </button>
+
+          {needsOutcome ? (
+            /* ── Sessão passada: desfecho rápido ── */
+            <>
+              <button className="popover-btn" onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'attended'))}>
+                <CheckCircle2 size={14} style={{ color: 'var(--status-success)' }} /> Realizado
+              </button>
+              <button className="popover-btn" onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'no_show'))}>
+                <UserX size={14} style={{ color: '#f59e0b' }} /> Paciente faltou (cobrar)
+              </button>
+              <button className="popover-btn" onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'canceled'))}>
+                <XCircle size={14} style={{ color: 'var(--text-muted)' }} /> Faltou / remarcou (não cobrar)
+              </button>
+              <button className="popover-btn danger" onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'canceled'))}>
+                <Ban size={14} /> Cancelado pelo terapeuta
+              </button>
+            </>
+          ) : (
+            /* ── Sessão futura ou já com desfecho ── */
+            <>
+              {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
+                <button className="popover-btn" onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'confirmed'))}>
+                  <Check size={14} /> Confirmar presença
+                </button>
+              )}
+              {appointment.status !== 'attended' && appointment.status !== 'canceled' && appointment.status !== 'no_show' && (
+                <button className="popover-btn danger" onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'canceled'))}>
+                  <X size={14} /> Cancelar
+                </button>
+              )}
+            </>
+          )}
+
           <hr style={{ margin: '0.25rem 0', borderColor: 'var(--border-color)' }} />
           <div style={{ display: 'flex', gap: '0.25rem' }}>
             <button className="popover-btn" style={{ flex: 1, justifyContent: 'center' }} onClick={(e) => handleAction(e, () => onEdit(appointment))}>

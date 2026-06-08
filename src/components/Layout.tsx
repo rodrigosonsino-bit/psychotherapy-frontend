@@ -37,7 +37,6 @@ export default function Layout() {
     { path: '/groups', icon: <Users2 size={20} />, label: 'Grupos Terapêuticos' },
     { path: '/appointments', icon: <Calendar size={20} />, label: 'Agendamentos' },
     { path: '/availability', icon: <CalendarDays size={20} />, label: 'Minha Disponibilidade' },
-    { path: '/sessions', icon: <CalendarDays size={20} />, label: 'Diário de Sessões' },
     { path: '/expenses', icon: <CreditCard size={20} />, label: 'Despesas' },
     { path: '/monthly-records', icon: <Calendar size={20} />, label: 'Faturamento Mensal' },
     { path: '/receipts', icon: <Receipt size={20} />, label: 'Recibos' },

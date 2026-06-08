@@ -271,7 +271,7 @@ export default function Receipts() {
                   <tr key={r.id}>
                     <td>#{String(r.receiptNumber).padStart(4, '0')}</td>
                     <td>{format(new Date(r.issueDate), 'dd/MM/yyyy')}</td>
-                    <td>{patient?.name || 'Desconhecido'}</td>
+                    <td>{patient?.fullName || patient?.name || 'Desconhecido'}</td>
                     <td><strong>{formatCurrency(r.amountCents)}</strong></td>
                     <td>{r.description}</td>
                     <td>
@@ -367,7 +367,7 @@ function IssueReceiptModal({ patients, onClose, onSave }: IssueReceiptModalProps
             >
               <option value="">Selecione...</option>
               {patients.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+                <option key={p.id} value={p.id}>{p.fullName || p.name}</option>
               ))}
             </select>
           </div>

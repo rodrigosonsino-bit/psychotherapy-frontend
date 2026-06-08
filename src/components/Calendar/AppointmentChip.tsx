@@ -26,7 +26,6 @@ export default function AppointmentChip({ appointment, patientName, onStatusUpda
 
   const isShort = appointment.durationMinutes < 40;
   const isPast = new Date(appointment.scheduledAt) < new Date();
-  const needsOutcome = isPast && (appointment.status === 'scheduled' || appointment.status === 'confirmed');
   const tPx = topPx(appointment.scheduledAt);
   const hPx = heightPx(appointment.durationMinutes);
   
@@ -94,24 +93,55 @@ export default function AppointmentChip({ appointment, patientName, onStatusUpda
             {timeStr} — {patientName}
           </div>
 
-          {needsOutcome ? (
-            /* ── Sessão passada: desfecho rápido ── */
+          {isPast ? (
+            /* ── Sessão passada: desfecho rápido / visualização de status ── */
             <>
-              <button className="popover-btn" onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'attended'))}>
-                <CheckCircle2 size={14} style={{ color: 'var(--status-success)' }} /> Realizado
+              <button 
+                className={`popover-btn ${appointment.status === 'attended' ? 'active' : ''}`} 
+                onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'attended'))}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <CheckCircle2 size={14} style={{ color: 'var(--status-success)' }} />
+                  <span>Realizado</span>
+                </div>
+                {appointment.status === 'attended' && <Check size={14} style={{ marginLeft: 'auto', color: 'var(--brand-primary, #6d5dfc)' }} />}
               </button>
-              <button className="popover-btn" onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'no_show'))}>
-                <UserX size={14} style={{ color: '#f59e0b' }} /> Paciente faltou (cobrar)
+
+              <button 
+                className={`popover-btn ${appointment.status === 'no_show' ? 'active' : ''}`} 
+                onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'no_show'))}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <UserX size={14} style={{ color: '#f59e0b' }} />
+                  <span>Paciente faltou (cobrar)</span>
+                </div>
+                {appointment.status === 'no_show' && <Check size={14} style={{ marginLeft: 'auto', color: 'var(--brand-primary, #6d5dfc)' }} />}
               </button>
-              <button className="popover-btn" onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'canceled'))}>
-                <XCircle size={14} style={{ color: 'var(--text-muted)' }} /> Faltou / remarcou (não cobrar)
+
+              <button 
+                className={`popover-btn ${appointment.status === 'canceled' ? 'active' : ''}`} 
+                onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'canceled'))}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <XCircle size={14} style={{ color: 'var(--text-muted)' }} />
+                  <span>Faltou / remarcou (não cobrar)</span>
+                </div>
+                {appointment.status === 'canceled' && <Check size={14} style={{ marginLeft: 'auto', color: 'var(--brand-primary, #6d5dfc)' }} />}
               </button>
-              <button className="popover-btn danger" onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'canceled'))}>
-                <Ban size={14} /> Cancelado pelo terapeuta
+
+              <button 
+                className={`popover-btn danger ${appointment.status === 'canceled' ? 'active' : ''}`} 
+                onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'canceled'))}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Ban size={14} />
+                  <span>Cancelado pelo terapeuta</span>
+                </div>
+                {appointment.status === 'canceled' && <Check size={14} style={{ marginLeft: 'auto', color: 'var(--brand-primary, #6d5dfc)' }} />}
               </button>
             </>
           ) : (
-            /* ── Sessão futura ou já com desfecho ── */
+            /* ── Sessão futura ── */
             <>
               {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
                 <button className="popover-btn" onClick={(e) => handleAction(e, () => onStatusUpdate(appointment.id, 'confirmed'))}>

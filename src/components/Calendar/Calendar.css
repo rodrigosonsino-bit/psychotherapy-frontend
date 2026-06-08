@@ -189,6 +189,11 @@
   background: rgba(239, 68, 68, 0.1);
   color: var(--status-danger);
 }
+.popover-btn.active {
+  background: rgba(109, 93, 252, 0.12);
+  color: var(--brand-primary, #6d5dfc);
+  font-weight: 500;
+}
 
 /* Mês */
 .month-grid {

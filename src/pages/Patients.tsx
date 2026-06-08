@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Trash2, MessageCircle, Mail, Search, ChevronLeft, ChevronRight, Link2, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, MessageCircle, Mail, Search, ChevronLeft, ChevronRight, Link2, ExternalLink, Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { fetchApi } from '../services/api';
 import type { Patient, PaginatedResponse, BookingLinkResult } from '../types/api';
@@ -11,7 +11,7 @@ import './Patients.css';
 
 const PAGE_SIZE = 20;
 
-import { MODALIDADE_OPTIONS, getModalidadeLabel } from '../constants/modalidade';
+import { MODALIDADE_OPTIONS, getModalidadeLabel, getModalidadeValue } from '../constants/modalidade';
 import type { ModalidadeValue } from '../constants/modalidade';
 import type { ReminderChannel } from '../types/api';
 import { formatCurrency } from '../utils/formatters';
@@ -26,9 +26,15 @@ export default function Patients() {
   const [error, setError] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const [editPatient, setEditPatient] = useState<Patient | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toast = useToast();
   const navigate = useNavigate();
+
+  const handleEditPatient = (patient: Patient) => {
+    setEditPatient(patient);
+    setShowModal(true);
+  };
 
   const loadPatients = useCallback(async (pg = page, q = search) => {
     try {
@@ -94,7 +100,7 @@ export default function Patients() {
     <div className="patients-page animate-fade-in">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-h1">Pacientes</h1>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+        <button className="btn btn-primary" onClick={() => { setEditPatient(null); setShowModal(true); }}>
           <Plus size={18} /> Novo Paciente
         </button>
       </div>
@@ -139,7 +145,7 @@ export default function Patients() {
                       {/* Nome clicável → perfil do paciente */}
                       <button
                         className="btn-link"
-                        style={{ fontWeight: 600, textAlign: 'left' }}
+                        style={{ fontWeight: 600, textAlign: 'left', color: 'var(--text-secondary)' }}
                         onClick={() => navigate(`/patients/${p.id}`)}
                       >
                         {p.name}
@@ -177,6 +183,13 @@ export default function Patients() {
                           onClick={() => navigate(`/patients/${p.id}`)}
                         >
                           <ExternalLink size={16} />
+                        </button>
+                        <button
+                          className="btn-icon"
+                          title="Editar"
+                          onClick={() => handleEditPatient(p)}
+                        >
+                          <Pencil size={16} />
                         </button>
                         <button
                           className="btn-icon"
@@ -232,8 +245,9 @@ export default function Patients() {
 
       {showModal && (
         <PatientModal
-          onClose={() => setShowModal(false)}
-          onSave={() => { loadPatients(page, search); setShowModal(false); }}
+          patientToEdit={editPatient}
+          onClose={() => { setShowModal(false); setEditPatient(null); }}
+          onSave={() => { loadPatients(page, search); setShowModal(false); setEditPatient(null); }}
         />
       )}
 
@@ -251,16 +265,23 @@ export default function Patients() {
 
 // ── PatientModal (apenas para Novo Paciente) ──────────────────────────────────
 
-function PatientModal({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
+interface PatientModalProps {
+  patientToEdit?: Patient | null;
+  onClose: () => void;
+  onSave: () => void;
+}
+
+function PatientModal({ patientToEdit, onClose, onSave }: PatientModalProps) {
   const [formData, setFormData] = useState({
-    name: '',
-    modalidade: 'sessao-semanal' as ModalidadeValue,
-    isInactive: false,
-    defaultSessionPriceCents: '',
-    document: '',
-    phone: '',
-    email: '',
-    reminderChannel: 'whatsapp' as ReminderChannel,
+    name: patientToEdit?.name || '',
+    fullName: patientToEdit?.fullName || '',
+    modalidade: patientToEdit ? getModalidadeValue(patientToEdit.status, patientToEdit.paymentType) : 'sessao-semanal' as ModalidadeValue,
+    isInactive: patientToEdit ? patientToEdit.status === 'inactive' : false,
+    defaultSessionPriceCents: patientToEdit?.defaultSessionPriceCents ? String(patientToEdit.defaultSessionPriceCents / 100) : '',
+    document: patientToEdit?.document || '',
+    phone: patientToEdit?.phone || '',
+    email: patientToEdit?.email || '',
+    reminderChannel: patientToEdit?.reminderChannel || 'whatsapp' as ReminderChannel,
   });
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
@@ -273,7 +294,9 @@ function PatientModal({ onClose, onSave }: { onClose: () => void; onSave: () => 
       await fetchApi('/api/psychotherapy/patients', {
         method: 'POST',
         body: JSON.stringify({
+          id: patientToEdit?.id,
           name: formData.name,
+          fullName: formData.fullName || null,
           status: formData.isInactive ? 'inactive' : option.status,
           paymentType: option.paymentType,
           defaultSessionPriceCents: formData.defaultSessionPriceCents
@@ -284,10 +307,10 @@ function PatientModal({ onClose, onSave }: { onClose: () => void; onSave: () => 
           reminderChannel: formData.reminderChannel,
         })
       });
-      toast.success('Paciente criado com sucesso.');
+      toast.success(patientToEdit ? 'Paciente atualizado com sucesso.' : 'Paciente criado com sucesso.');
       onSave();
     } catch (error) {
-      toast.error((error instanceof Error ? error.message : String(error)) || 'Falha ao criar paciente.');
+      toast.error((error instanceof Error ? error.message : String(error)) || (patientToEdit ? 'Falha ao atualizar paciente.' : 'Falha ao criar paciente.'));
     } finally {
       setSubmitting(false);
     }
@@ -296,12 +319,17 @@ function PatientModal({ onClose, onSave }: { onClose: () => void; onSave: () => 
   return (
     <div className="modal-overlay">
       <div className="modal-content animate-fade-in" style={{ maxWidth: '600px' }}>
-        <h2 className="text-h2 mb-4">Novo Paciente</h2>
+        <h2 className="text-h2 mb-4">{patientToEdit ? 'Editar Paciente' : 'Novo Paciente'}</h2>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label">Nome *</label>
             <input required type="text" className="form-control" value={formData.name}
               onChange={e => setFormData({ ...formData, name: e.target.value })} disabled={submitting} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Nome Completo (para Emissão de Recibo)</label>
+            <input type="text" className="form-control" placeholder="Ex.: Ana de Souza Santos" value={formData.fullName}
+              onChange={e => setFormData({ ...formData, fullName: e.target.value })} disabled={submitting} />
           </div>
           <div className="flex gap-4 items-end">
             <div className="form-group w-full">
@@ -365,7 +393,7 @@ function PatientModal({ onClose, onSave }: { onClose: () => void; onSave: () => 
           <div className="flex justify-end gap-2 mt-6">
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={submitting}>Cancelar</button>
             <button type="submit" className="btn btn-primary" disabled={submitting}>
-              {submitting ? 'Criando...' : 'Criar Paciente'}
+              {submitting ? (patientToEdit ? 'Salvando...' : 'Criando...') : (patientToEdit ? 'Salvar Alterações' : 'Criar Paciente')}
             </button>
           </div>
         </form>

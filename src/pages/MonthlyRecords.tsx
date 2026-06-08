@@ -217,7 +217,8 @@ export default function MonthlyRecords() {
   };
 
   const getReceivedAmount = (record: MonthlyRecord) => {
-    if (record.paymentType === 'monthly') return record.paymentStatus === 'paid' ? (record.sessionPriceCents || 0) : 0;
+    // Both monthly and per_session: received = price × paid sessions.
+    // Each paid session = real cash in, regardless of billing cycle.
     return (record.sessionPriceCents || 0) * (record.paidSessions || 0);
   };
 

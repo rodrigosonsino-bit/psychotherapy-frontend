@@ -84,6 +84,22 @@ export interface Expense {
   amountCents: number;
   description: string;
   category: 'rent' | 'taxes' | 'software' | 'marketing' | 'other';
+  fixedExpenseId?: string | null;
+  referenceMonth?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FixedExpense {
+  id: string;
+  tenantId: string;
+  description: string;
+  amountCents: number;
+  dayOfMonth: number;
+  category: string | null;
+  startDate: string; // 'YYYY-MM-DD'
+  endDate: string | null; // 'YYYY-MM-DD'
+  active: boolean;
   createdAt: string;
   updatedAt: string;
 }

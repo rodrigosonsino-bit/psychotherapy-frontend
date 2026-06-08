@@ -33,6 +33,7 @@ export interface Patient {
   phone: string | null;
   email: string | null;
   reminderChannel: ReminderChannel;
+  fullName: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -255,6 +256,7 @@ export interface IrMonthlyBreakdown {
 export interface IrPatientSummary {
   patientId: string;
   patientName: string;
+  patientFullName?: string | null;
   document: string | null;   // CPF
   totalPaidCents: number;
   sessionCount: number;

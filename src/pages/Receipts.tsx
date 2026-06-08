@@ -170,12 +170,14 @@ export default function Receipts() {
     doc.setFontSize(9);
     doc.text('PACIENTE', 25, 94);
 
+    const displayName = patient.fullName || patient.name;
+
     doc.setTextColor(darkSlate.r, darkSlate.g, darkSlate.b);
     doc.setFontSize(9);
     doc.setFont('Helvetica', 'bold');
     doc.text(`Nome:`, 25, 101);
     doc.setFont('Helvetica', 'normal');
-    doc.text(`${patient.name}`, 55, 101);
+    doc.text(`${displayName}`, 55, 101);
 
     doc.setFont('Helvetica', 'bold');
     doc.text(`CPF:`, 25, 106);
@@ -187,7 +189,7 @@ export default function Receipts() {
     doc.setFontSize(10);
     doc.setFont('Helvetica', 'normal');
     
-    const statementText = `Declaro para os devidos fins que recebi de ${patient.name}, inscrito no CPF sob o nº ${patient.document || '___________________'}, a importância de ${formatCurrency(receipt.amountCents)} referente a serviços de psicoterapia correspondentes a: "${receipt.description}".`;
+    const statementText = `Declaro para os devidos fins que recebi de ${displayName}, inscrito no CPF sob o nº ${patient.document || '___________________'}, a importância de ${formatCurrency(receipt.amountCents)} referente a serviços de psicoterapia correspondentes a: "${receipt.description}".`;
     
     // Split text automatically to fit width (170mm)
     const splitText = doc.splitTextToSize(statementText, 170);
@@ -217,7 +219,7 @@ export default function Receipts() {
     doc.setTextColor(secondarySlate.r, secondarySlate.g, secondarySlate.b);
     doc.text('Este recibo comprova a prestação de serviços de psicoterapia para fins tributários ou de reembolso de plano de saúde.', 105, 260, { align: 'center' });
 
-    doc.save(`Recibo_${receipt.receiptNumber}_${patient.name.replace(/\s+/g, '_')}.pdf`);
+    doc.save(`Recibo_${receipt.receiptNumber}_${displayName.replace(/\s+/g, '_')}.pdf`);
   };
 
   return (

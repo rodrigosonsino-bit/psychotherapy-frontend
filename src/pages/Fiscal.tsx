@@ -73,7 +73,9 @@ export default function Fiscal() {
 
       doc.line(20, 80, 190, 80);
 
-      doc.text(`Recebi(emos) de ${patient.patientName}`, 20, 95);
+      const displayName = patient.patientFullName || patient.patientName;
+
+      doc.text(`Recebi(emos) de ${displayName}`, 20, 95);
       if (patient.document) {
         doc.text(`Inscrito(a) no CPF sob o nº: ${patient.document}`, 20, 103);
       } else {
@@ -93,7 +95,7 @@ export default function Fiscal() {
       doc.line(60, 190, 150, 190);
       doc.text(`${report.tenant.fullName || report.tenant.name}`, 105, 198, { align: 'center' });
 
-      doc.save(`Informe_Pagamentos_${patient.patientName.replace(/\s+/g, '_')}_${year}.pdf`);
+      doc.save(`Informe_Pagamentos_${displayName.replace(/\s+/g, '_')}_${year}.pdf`);
     } catch {
       toast.error('Erro ao gerar PDF');
     } finally {

@@ -368,3 +368,70 @@
     flex-wrap: wrap;
   }
 }
+
+/* Sub-abas do painel de detalhes do grupo */
+.groups-subtabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 1rem;
+  gap: 1.25rem;
+}
+
+.groups-subtab {
+  background: none;
+  border: none;
+  padding: 0.5rem 0.25rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 0.85rem;
+  position: relative;
+  transition: color var(--transition-fast);
+}
+
+.groups-subtab:hover {
+  color: var(--text-primary);
+}
+
+.groups-subtab.active {
+  color: var(--brand-primary);
+  font-weight: 600;
+}
+
+.groups-subtab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--brand-primary);
+  border-radius: var(--radius-full);
+}
+
+/* Histórico de pagamentos no popover/detalhes */
+.payment-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--bg-base);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.payment-history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.payment-history-item:last-child {
+  border-bottom: none;
+}

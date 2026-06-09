@@ -3,7 +3,7 @@ import type { Patient } from '../types/api';
 import {
   Users, ChevronLeft, ChevronRight, ClipboardCheck,
   Clock, Calendar, CheckCircle2, XCircle, AlertCircle, RefreshCw,
-  UserPlus, UserMinus, Search
+  UserPlus, UserMinus, Search, Pencil, Trash2, Plus, CreditCard, Banknote, Wallet
 } from 'lucide-react';
 import { fetchApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -25,6 +25,9 @@ interface TherapyGroup {
   duration_minutes: number;
   is_active: boolean;
   member_count: number;
+  monthly_fee_cents: number | null;
+  start_date: string | null;
+  duration_months: number | null;
 }
 
 interface GroupMember {
@@ -78,11 +81,17 @@ function monthLabel(str: string) {
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 }
 
+function formatDate(dateStr: string) {
+  const [y, m, d] = dateStr.split('-');
+  return `${d}/${m}/${y}`;
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function Groups() {
   const toast = useToast();
   const [tab, setTab] = useState<'groups' | 'sessions'>('groups');
+  const [subTab, setSubTab] = useState<'members' | 'payments'>('members');
   const [groups, setGroups] = useState<TherapyGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<TherapyGroup | null>(null);
   const [members, setMembers] = useState<GroupMember[]>([]);
@@ -93,14 +102,30 @@ export default function Groups() {
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
 
+  // Novos estados para CRUD de grupos e pagamentos
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [groupToEdit, setGroupToEdit] = useState<TherapyGroup | null>(null);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentPatient, setPaymentPatient] = useState<{ patient_id: string; name: string } | null>(null);
+  const [expandedPatientId, setExpandedPatientId] = useState<string | null>(null);
+
   // Load groups
-  const loadGroups = useCallback(async () => {
+  const loadGroups = useCallback(async (selectId?: string) => {
     try {
       setLoadingGroups(true);
       const res = await fetchApi<{ data: TherapyGroup[] }>('/api/psychotherapy/groups');
       setGroups(res.data);
-      if (res.data.length > 0 && !selectedGroup) {
-        setSelectedGroup(res.data[0]);
+      if (res.data.length > 0) {
+        if (selectId) {
+          const found = res.data.find(g => g.id === selectId);
+          if (found) setSelectedGroup(found);
+        } else if (!selectedGroup) {
+          setSelectedGroup(res.data[0]);
+        }
+      } else {
+        setSelectedGroup(null);
       }
     } catch {
       toast.error('Erro ao carregar grupos.');
@@ -136,14 +161,30 @@ export default function Groups() {
     }
   }, []);
 
+  // Load payments
+  const loadPayments = useCallback(async (groupId: string, month: string) => {
+    try {
+      setLoadingPayments(true);
+      const res = await fetchApi<{ data: any[] }>(
+        `/api/psychotherapy/groups/${groupId}/payments?month=${month}`
+      );
+      setPayments(res.data);
+    } catch {
+      toast.error('Erro ao carregar pagamentos.');
+    } finally {
+      setLoadingPayments(false);
+    }
+  }, [toast]);
+
   useEffect(() => { loadGroups(); }, [loadGroups]);
 
   useEffect(() => {
     if (selectedGroup) {
       loadMembers(selectedGroup.id, currentMonth);
       loadHistory(selectedGroup.id, currentMonth);
+      loadPayments(selectedGroup.id, currentMonth);
     }
-  }, [selectedGroup, currentMonth, loadMembers, loadHistory]);
+  }, [selectedGroup, currentMonth, loadMembers, loadHistory, loadPayments]);
 
   const prevMonth = () => {
     const [y, m] = currentMonth.split('-').map(Number);
@@ -173,6 +214,48 @@ export default function Groups() {
     }
   };
 
+  const handleDeleteGroup = async (groupId: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este grupo? Esta ação não pode ser desfeita.')) return;
+    try {
+      await fetchApi(`/api/psychotherapy/groups/${groupId}`, { method: 'DELETE' });
+      toast.success('Grupo excluído com sucesso!');
+      setSelectedGroup(null);
+      loadGroups();
+    } catch (err) {
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Erro ao excluir grupo.');
+    }
+  };
+
+  const handleDeletePayment = async (groupId: string, payment: any) => {
+    let mode: 'single' | 'all' = 'single';
+    
+    if (payment.installment_group_id && payment.total_installments > 1) {
+      const confirmAll = window.confirm(
+        `Este pagamento faz parte de um parcelamento de ${payment.total_installments}x.\n\n` +
+        `Clique em OK para excluir TODAS as parcelas deste parcelamento.\n` +
+        `Clique em Cancelar para excluir APENAS esta parcela.`
+      );
+      mode = confirmAll ? 'all' : 'single';
+    } else {
+      if (!window.confirm('Tem certeza que deseja excluir este pagamento?')) return;
+    }
+
+    try {
+      await fetchApi(`/api/psychotherapy/groups/${groupId}/payments/${payment.id}?mode=${mode}`, {
+        method: 'DELETE'
+      });
+      toast.success('Pagamento estornado com sucesso!');
+      loadPayments(groupId, currentMonth);
+    } catch (err) {
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Erro ao estornar pagamento.');
+    }
+  };
+
+  const openGroupModal = (group: TherapyGroup | null) => {
+    setGroupToEdit(group);
+    setShowGroupModal(true);
+  };
+
   // Group sessions by date for history view
   const groupedHistory = sessionHistory.reduce<Record<string, SessionRecord[]>>((acc, r) => {
     const date = r.session_date.slice(0, 10);
@@ -191,16 +274,22 @@ export default function Groups() {
             Gerencie sessões, presenças e faturamento dos grupos
           </p>
         </div>
-        {selectedGroup && (
-          <button
-            id="btn-register-group-session"
-            className="btn btn-primary"
-            onClick={() => setShowRegisterModal(true)}
-          >
-            <ClipboardCheck size={16} />
-            Registrar Sessão
+        <div className="flex gap-2">
+          <button className="btn btn-secondary" onClick={() => openGroupModal(null)}>
+            <Plus size={16} />
+            Novo Grupo
           </button>
-        )}
+          {selectedGroup && (
+            <button
+              id="btn-register-group-session"
+              className="btn btn-primary"
+              onClick={() => setShowRegisterModal(true)}
+            >
+              <ClipboardCheck size={16} />
+              Registrar Sessão
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -244,7 +333,7 @@ export default function Groups() {
               <div className="groups-empty">
                 <Users size={36} />
                 <p>Nenhum grupo encontrado.</p>
-                <p className="text-small">Crie grupos no painel de configurações.</p>
+                <p className="text-small">Crie um grupo utilizando o botão "Novo Grupo" no topo.</p>
               </div>
             ) : (
               <div className="groups-grid" style={{ gridTemplateColumns: '1fr' }}>
@@ -274,8 +363,14 @@ export default function Groups() {
                       )}
                       <span className="group-meta-row">
                         <Clock size={12} />
-                        {g.duration_minutes} min • {formatCurrency(g.session_price_cents)}/sessão
+                        {g.duration_minutes} min • {g.monthly_fee_cents !== null && g.monthly_fee_cents > 0 ? `${formatCurrency(g.monthly_fee_cents)}/mês` : `${formatCurrency(g.session_price_cents)}/sessão`}
                       </span>
+                      {g.duration_months && (
+                        <span className="group-meta-row">
+                          <Calendar size={12} />
+                          {g.duration_months} meses {g.start_date ? `• início ${formatDate(g.start_date)}` : ''}
+                        </span>
+                      )}
                     </div>
                     <div className="group-card-footer">
                       <span className="group-member-count">
@@ -298,7 +393,23 @@ export default function Groups() {
                     <Users size={18} />
                     {selectedGroup.name}
                   </span>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      className="btn btn-secondary"
+                      style={{ padding: '0.375rem 0.75rem', fontSize: '0.8rem' }}
+                      title="Editar grupo"
+                      onClick={() => openGroupModal(selectedGroup)}
+                    >
+                      <Pencil size={13} /> Editar
+                    </button>
+                    <button
+                      className="btn btn-danger"
+                      style={{ padding: '0.375rem 0.75rem', fontSize: '0.8rem' }}
+                      title="Excluir grupo"
+                      onClick={() => handleDeleteGroup(selectedGroup.id)}
+                    >
+                      <Trash2 size={13} /> Excluir
+                    </button>
                     <button
                       id="btn-add-member"
                       className="btn btn-secondary"
@@ -306,13 +417,16 @@ export default function Groups() {
                       onClick={() => setShowAddMemberModal(true)}
                     >
                       <UserPlus size={13} />
-                      Adicionar Membro
+                      Membro
                     </button>
                     <button
                       id="btn-refresh-members"
                       className="btn btn-secondary"
                       style={{ padding: '0.375rem 0.75rem', fontSize: '0.8rem' }}
-                      onClick={() => loadMembers(selectedGroup.id, currentMonth)}
+                      onClick={() => {
+                        loadMembers(selectedGroup.id, currentMonth);
+                        loadPayments(selectedGroup.id, currentMonth);
+                      }}
                     >
                       <RefreshCw size={13} />
                       Atualizar
@@ -320,73 +434,202 @@ export default function Groups() {
                   </div>
                 </div>
 
-                {loadingMembers ? (
-                  <SkeletonTable rows={4} cols={4} />
-                ) : members.length === 0 ? (
-                  <div className="groups-empty">
-                    <Users size={28} />
-                    <p>Nenhum membro ativo neste grupo.</p>
-                  </div>
-                ) : (
-                  <div className="table-container">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Paciente</th>
-                          <th>Sessões</th>
-                          <th style={{ textAlign: 'center' }}>Status {currentMonth.slice(0, 7)}</th>
-                          <th>Tipo</th>
-                          <th style={{ width: '40px' }}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {members.map(m => (
-                          <tr key={m.patient_id}>
-                            <td>
-                              <strong style={{ color: 'var(--text-primary)' }}>{m.name}</strong>
-                              {m.phone && <div className="text-small">{m.phone}</div>}
-                            </td>
-                            <td>
-                              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                                {m.paid_sessions}/{m.expected_sessions}
-                                {m.absences > 0 && (
-                                  <span style={{ color: 'var(--status-warning)', marginLeft: '0.35rem' }}>
-                                    ({m.absences} falta{m.absences !== 1 ? 's' : ''})
-                                  </span>
-                                )}
-                              </span>
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              <span className={`payment-pill ${m.payment_status}`}>
-                                <span className={`payment-dot ${m.payment_status}`} />
-                                {PAYMENT_LABEL[m.payment_status]}
-                              </span>
-                            </td>
-                            <td>
-                              <span className="text-small" style={{ textTransform: 'capitalize' }}>
-                                {m.payment_type === 'monthly' ? 'Mensal' : 'Por sessão'}
-                              </span>
-                            </td>
-                            <td>
-                              <button
-                                className="icon-btn danger"
-                                title="Remover Membro"
-                                onClick={() => removeMember(m.patient_id, m.name)}
-                              >
-                                <UserMinus size={15} />
-                              </button>
-                            </td>
+                {/* Sub-Abas: Membros | Pagamentos */}
+                <div className="groups-subtabs">
+                  <button
+                    className={`groups-subtab ${subTab === 'members' ? 'active' : ''}`}
+                    onClick={() => setSubTab('members')}
+                  >
+                    Membros
+                  </button>
+                  <button
+                    className={`groups-subtab ${subTab === 'payments' ? 'active' : ''}`}
+                    onClick={() => setSubTab('payments')}
+                  >
+                    Pagamentos
+                  </button>
+                </div>
+
+                {subTab === 'payments' ? (
+                  /* ── Sub-Aba Pagamentos ── */
+                  loadingPayments ? (
+                    <SkeletonTable rows={4} cols={4} />
+                  ) : payments.length === 0 ? (
+                    <div className="groups-empty">
+                      <Users size={28} />
+                      <p>Nenhum membro ativo neste grupo.</p>
+                    </div>
+                  ) : (
+                    <div className="table-container">
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Paciente</th>
+                            <th>Status</th>
+                            <th>Total Pago</th>
+                            <th style={{ width: '150px', textAlign: 'right' }}>Ações</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {payments.map(m => {
+                            const hasPayments = m.payments && m.payments.length > 0;
+                            const isExpanded = expandedPatientId === m.patient_id;
+
+                            return (
+                              <React.Fragment key={m.patient_id}>
+                                <tr>
+                                  <td>
+                                    <strong style={{ color: 'var(--text-primary)' }}>{m.name}</strong>
+                                    {isExpanded && hasPayments && (
+                                      <div className="payment-history-list">
+                                        {m.payments.map((p: any) => (
+                                          <div key={p.id} className="payment-history-item">
+                                            <span>
+                                              Parc. {p.installment_number}/{p.total_installments}: {formatCurrency(p.amount_cents)} ({p.payment_method === 'pix' ? 'PIX' : p.payment_method === 'cash' ? 'Dinheiro' : p.payment_method === 'debit_card' ? 'Débito' : 'Crédito'})
+                                              {p.notes && <span className="text-muted" style={{ marginLeft: '0.25rem' }}>({p.notes})</span>}
+                                            </span>
+                                            <button
+                                              className="icon-btn danger"
+                                              style={{ padding: '2px', marginLeft: '6px' }}
+                                              onClick={() => handleDeletePayment(selectedGroup.id, p)}
+                                              title="Estornar esta parcela"
+                                            >
+                                              <Trash2 size={12} />
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td>
+                                    <span className={`payment-pill ${m.payment_status}`}>
+                                      <span className={`payment-dot ${m.payment_status}`} />
+                                      {PAYMENT_LABEL[m.payment_status as PaymentStatus]}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <strong>{formatCurrency(m.total_paid_cents)}</strong>
+                                    {m.total_installments && m.total_installments > 1 && (
+                                      <div className="text-small" style={{ color: 'var(--text-muted)' }}>
+                                        {m.payments_count} de {m.total_installments} parcelas
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td style={{ textAlign: 'right' }}>
+                                    <div className="flex gap-2 justify-end">
+                                      {m.payment_status === 'pending' && (
+                                        <button
+                                          className="btn btn-primary btn-sm"
+                                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                          onClick={() => {
+                                            setPaymentPatient({ patient_id: m.patient_id, name: m.name });
+                                            setShowPaymentModal(true);
+                                          }}
+                                        >
+                                          Registrar
+                                        </button>
+                                      )}
+                                      {m.payment_status === 'partial' && (
+                                        <button
+                                          className="btn btn-secondary btn-sm"
+                                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                          onClick={() => {
+                                            setPaymentPatient({ patient_id: m.patient_id, name: m.name });
+                                            setShowPaymentModal(true);
+                                          }}
+                                        >
+                                          + Parcela
+                                        </button>
+                                      )}
+                                      {hasPayments && (
+                                        <button
+                                          className="btn btn-secondary btn-sm"
+                                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                          onClick={() => setExpandedPatientId(isExpanded ? null : m.patient_id)}
+                                        >
+                                          {isExpanded ? 'Ocultar' : 'Ver'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                ) : (
+                  /* ── Sub-Aba Membros ── */
+                  loadingMembers ? (
+                    <SkeletonTable rows={4} cols={4} />
+                  ) : members.length === 0 ? (
+                    <div className="groups-empty">
+                      <Users size={28} />
+                      <p>Nenhum membro ativo neste grupo.</p>
+                    </div>
+                  ) : (
+                    <div className="table-container">
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Paciente</th>
+                            <th>Sessões</th>
+                            <th style={{ textAlign: 'center' }}>Status {currentMonth.slice(0, 7)}</th>
+                            <th>Tipo</th>
+                            <th style={{ width: '40px' }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {members.map(m => (
+                            <tr key={m.patient_id}>
+                              <td>
+                                <strong style={{ color: 'var(--text-primary)' }}>{m.name}</strong>
+                                {m.phone && <div className="text-small">{m.phone}</div>}
+                              </td>
+                              <td>
+                                <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                                  {m.paid_sessions}/{m.expected_sessions}
+                                  {m.absences > 0 && (
+                                    <span style={{ color: 'var(--status-warning)', marginLeft: '0.35rem' }}>
+                                      ({m.absences} falta{m.absences !== 1 ? 's' : ''})
+                                    </span>
+                                  )}
+                                </span>
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                <span className={`payment-pill ${m.payment_status}`}>
+                                  <span className={`payment-dot ${m.payment_status}`} />
+                                  {PAYMENT_LABEL[m.payment_status]}
+                                </span>
+                              </td>
+                              <td>
+                                <span className="text-small" style={{ textTransform: 'capitalize' }}>
+                                  {m.payment_type === 'monthly' ? 'Mensal' : 'Por sessão'}
+                                </span>
+                              </td>
+                              <td>
+                                <button
+                                  className="icon-btn danger"
+                                  title="Remover Membro"
+                                  onClick={() => removeMember(m.patient_id, m.name)}
+                                >
+                                  <UserMinus size={15} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
                 )}
               </div>
             ) : (
               <div className="groups-empty" style={{ height: '100%', minHeight: '200px' }}>
                 <Users size={28} />
-                <p>Selecione um grupo para ver os membros</p>
+                <p>Selecione um grupo para ver os membros e pagamentos</p>
               </div>
             )}
           </div>
@@ -494,6 +737,38 @@ export default function Groups() {
             setShowAddMemberModal(false);
             toast.success('Membro adicionado com sucesso!');
             loadMembers(selectedGroup.id, currentMonth);
+          }}
+        />
+      )}
+
+      {/* Group Form Modal */}
+      {showGroupModal && (
+        <GroupFormModal
+          group={groupToEdit}
+          onClose={() => setShowGroupModal(false)}
+          onSuccess={(savedGroup) => {
+            setShowGroupModal(false);
+            toast.success(groupToEdit ? 'Grupo atualizado com sucesso!' : 'Grupo criado com sucesso!');
+            loadGroups(savedGroup.id);
+          }}
+        />
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && selectedGroup && paymentPatient && (
+        <PaymentModal
+          group={selectedGroup}
+          patient={paymentPatient}
+          referenceMonth={currentMonth}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setPaymentPatient(null);
+          }}
+          onSuccess={() => {
+            setShowPaymentModal(false);
+            setPaymentPatient(null);
+            toast.success('Pagamento registrado com sucesso!');
+            loadPayments(selectedGroup.id, currentMonth);
           }}
         />
       )}
@@ -812,6 +1087,428 @@ function AddMemberModal({
             Fechar
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Group Form Modal (Criar/Editar Grupo) ──────────────────────────────────────
+
+function GroupFormModal({
+  group, onClose, onSuccess
+}: {
+  group: TherapyGroup | null;
+  onClose: () => void;
+  onSuccess: (savedGroup: TherapyGroup) => void;
+}) {
+  const toast = useToast();
+  const [submitting, setSubmitting] = useState(false);
+
+  const [name, setName] = useState(group?.name ?? '');
+  const [description, setDescription] = useState(group?.description ?? '');
+  const [monthlyFee, setMonthlyFee] = useState(group?.monthly_fee_cents ? String(group.monthly_fee_cents / 100) : '0');
+  const [dayOfWeek, setDayOfWeek] = useState(group?.day_of_week !== null && group?.day_of_week !== undefined ? String(group.day_of_week) : '');
+  const [startTime, setStartTime] = useState(group?.start_time ? group.start_time.slice(0, 5) : '');
+  const [durationMinutes, setDurationMinutes] = useState(group?.duration_minutes ? String(group.duration_minutes) : '90');
+  const [startDate, setStartDate] = useState(group?.start_date ? group.start_date.slice(0, 10) : '');
+  const [durationMonths, setDurationMonths] = useState(group?.duration_months ? String(group.duration_months) : '');
+
+  const calculateEndDate = (startDateStr: string, monthsStr: string) => {
+    if (!startDateStr || !monthsStr) return '';
+    const months = parseInt(monthsStr, 10);
+    if (isNaN(months) || months <= 0) return '';
+    const [y, m, d] = startDateStr.split('-').map(Number);
+    const date = new Date(y, m - 1 + months, d);
+    return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!name) {
+      toast.error('Nome do grupo é obrigatório');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const url = group ? `/api/psychotherapy/groups/${group.id}` : '/api/psychotherapy/groups';
+      const method = group ? 'PUT' : 'POST';
+
+      const res = await fetchApi<{ data: TherapyGroup }>(url, {
+        method,
+        body: JSON.stringify({
+          name,
+          description: description || null,
+          monthly_fee_cents: Math.round(parseFloat(monthlyFee) * 100),
+          day_of_week: dayOfWeek !== '' ? parseInt(dayOfWeek, 10) : null,
+          start_time: startTime || null,
+          duration_minutes: parseInt(durationMinutes, 10),
+          start_date: startDate || null,
+          duration_months: durationMonths !== '' ? parseInt(durationMonths, 10) : null
+        })
+      });
+
+      onSuccess(res.data);
+    } catch (err) {
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Erro ao salvar grupo.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const endPreview = calculateEndDate(startDate, durationMonths);
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content animate-fade-in" style={{ maxWidth: '540px' }}>
+        <h2 className="text-h2 mb-4">{group ? 'Editar Grupo' : 'Novo Grupo'}</h2>
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-group mb-3">
+            <label className="form-label">Nome do Grupo *</label>
+            <input
+              type="text"
+              className="form-control"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              required
+              disabled={submitting}
+            />
+          </div>
+
+          <div className="form-group mb-3">
+            <label className="form-label">Descrição</label>
+            <textarea
+              className="form-control"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              rows={2}
+              disabled={submitting}
+            />
+          </div>
+
+          <div className="flex gap-4 mb-3">
+            <div className="form-group w-full">
+              <label className="form-label">Mensalidade (R$) *</label>
+              <input
+                type="number"
+                className="form-control"
+                value={monthlyFee}
+                onChange={e => setMonthlyFee(e.target.value)}
+                min="0"
+                step="0.01"
+                required
+                disabled={submitting}
+              />
+            </div>
+            <div className="form-group w-full">
+              <label className="form-label">Duração da Sessão (min) *</label>
+              <input
+                type="number"
+                className="form-control"
+                value={durationMinutes}
+                onChange={e => setDurationMinutes(e.target.value)}
+                min="10"
+                required
+                disabled={submitting}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-4 mb-3">
+            <div className="form-group w-full">
+              <label className="form-label">Dia da Semana</label>
+              <select
+                className="form-control"
+                value={dayOfWeek}
+                onChange={e => setDayOfWeek(e.target.value)}
+                disabled={submitting}
+              >
+                <option value="">Sem dia fixo</option>
+                <option value="1">Segunda-feira</option>
+                <option value="2">Terça-feira</option>
+                <option value="3">Quarta-feira</option>
+                <option value="4">Quinta-feira</option>
+                <option value="5">Sexta-feira</option>
+                <option value="6">Sábado</option>
+                <option value="0">Domingo</option>
+              </select>
+            </div>
+            <div className="form-group w-full">
+              <label className="form-label">Horário</label>
+              <input
+                type="time"
+                className="form-control"
+                value={startTime}
+                onChange={e => setStartTime(e.target.value)}
+                disabled={submitting}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-4 mb-3">
+            <div className="form-group w-full">
+              <label className="form-label">Data de Início</label>
+              <input
+                type="date"
+                className="form-control"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                disabled={submitting}
+              />
+            </div>
+            <div className="form-group w-full">
+              <label className="form-label">Duração do Programa (meses)</label>
+              <input
+                type="number"
+                className="form-control"
+                value={durationMonths}
+                onChange={e => setDurationMonths(e.target.value)}
+                min="1"
+                disabled={submitting}
+              />
+            </div>
+          </div>
+
+          {endPreview && (
+            <div className="mb-4 text-small" style={{ color: 'var(--brand-primary)', fontWeight: 500 }}>
+              📅 Término previsto: <span style={{ textTransform: 'capitalize' }}>{endPreview}</span>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2" style={{ marginTop: '1.25rem' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onClose}
+              disabled={submitting}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={submitting}
+            >
+              {submitting ? 'Salvando...' : 'Salvar grupo'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Payment Modal (Registrar Pagamento de Grupo) ──────────────────────────────────
+
+function PaymentModal({
+  group, patient, referenceMonth, onClose, onSuccess
+}: {
+  group: TherapyGroup;
+  patient: { patient_id: string; name: string };
+  referenceMonth: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const toast = useToast();
+  const [submitting, setSubmitting] = useState(false);
+
+  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cash' | 'debit_card' | 'credit_card'>('pix');
+  const [isInstallment, setIsInstallment] = useState(false);
+  const [totalInstallments, setTotalInstallments] = useState(2);
+  
+  const feeCents = group.monthly_fee_cents ?? 0;
+  
+  const defaultAmountCents = isInstallment && paymentMethod === 'credit_card'
+    ? Math.round(feeCents / totalInstallments)
+    : feeCents;
+
+  const [amount, setAmount] = useState(String(defaultAmountCents / 100));
+  const [notes, setNotes] = useState('');
+
+  useEffect(() => {
+    const defaultValCents = isInstallment && paymentMethod === 'credit_card'
+      ? Math.round(feeCents / totalInstallments)
+      : feeCents;
+    setAmount(String(defaultValCents / 100));
+  }, [isInstallment, totalInstallments, paymentMethod, feeCents]);
+
+  const getMonthsPreview = (startMonth: string, count: number): string => {
+    const [year, month] = startMonth.split('-').map(Number);
+    const monthsNamesShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const results = [];
+    for (let i = 0; i < count; i++) {
+      const d = new Date(year, month - 1 + i, 1);
+      results.push(monthsNamesShort[d.getMonth()]);
+    }
+    return results.join(' · ');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const amountCents = Math.round(parseFloat(amount) * 100);
+    if (isNaN(amountCents) || amountCents <= 0) {
+      toast.error('Valor inválido');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await fetchApi(`/api/psychotherapy/groups/${group.id}/payments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          patient_id: patient.patient_id,
+          reference_month: referenceMonth,
+          amount_cents: amountCents,
+          payment_method: paymentMethod,
+          total_installments: isInstallment && paymentMethod === 'credit_card' ? totalInstallments : 1,
+          notes: notes || null
+        })
+      });
+      onSuccess();
+    } catch (err) {
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Erro ao registrar pagamento.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const parsedAmount = parseFloat(amount) || 0;
+  const showInstallments = paymentMethod === 'credit_card';
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content animate-fade-in" style={{ maxWidth: '480px' }}>
+        <h2 className="text-h2 mb-2">Registrar Pagamento</h2>
+        <p className="text-body mb-4" style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+          Paciente: <strong>{patient.name}</strong><br />
+          Mês de referência: <span style={{ textTransform: 'capitalize' }}>{monthLabel(referenceMonth)}</span>
+        </p>
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-group mb-4">
+            <label className="form-label">Forma de Pagamento</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className={`btn ${paymentMethod === 'pix' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ justifyContent: 'center', gap: '0.35rem', fontSize: '0.85rem', padding: '0.5rem' }}
+                onClick={() => { setPaymentMethod('pix'); setIsInstallment(false); }}
+              >
+                <Wallet size={14} /> PIX
+              </button>
+              <button
+                type="button"
+                className={`btn ${paymentMethod === 'cash' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ justifyContent: 'center', gap: '0.35rem', fontSize: '0.85rem', padding: '0.5rem' }}
+                onClick={() => { setPaymentMethod('cash'); setIsInstallment(false); }}
+              >
+                <Banknote size={14} /> Dinheiro
+              </button>
+              <button
+                type="button"
+                className={`btn ${paymentMethod === 'debit_card' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ justifyContent: 'center', gap: '0.35rem', fontSize: '0.85rem', padding: '0.5rem' }}
+                onClick={() => { setPaymentMethod('debit_card'); setIsInstallment(false); }}
+              >
+                <CreditCard size={14} /> Débito
+              </button>
+              <button
+                type="button"
+                className={`btn ${paymentMethod === 'credit_card' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ justifyContent: 'center', gap: '0.35rem', fontSize: '0.85rem', padding: '0.5rem' }}
+                onClick={() => setPaymentMethod('credit_card')}
+              >
+                <CreditCard size={14} /> Crédito
+              </button>
+            </div>
+          </div>
+
+          {showInstallments && (
+            <div className="mb-4" style={{ padding: '0.75rem', background: 'var(--bg-base)', border: '1px solid var(--border-color)', borderRadius: '6px' }}>
+              <label className="flex items-center gap-2" style={{ fontSize: '0.85rem', cursor: 'pointer', fontWeight: 500 }}>
+                <input
+                  type="checkbox"
+                  checked={isInstallment}
+                  onChange={e => setIsInstallment(e.target.checked)}
+                />
+                Deseja parcelar o pagamento?
+              </label>
+              
+              {isInstallment && (
+                <div className="mt-3">
+                  <label className="form-label text-small">Número de parcelas</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={totalInstallments}
+                    onChange={e => setTotalInstallments(Math.max(2, parseInt(e.target.value, 10) || 2))}
+                    min="2"
+                    max="12"
+                    required
+                    disabled={submitting}
+                  />
+                  <div className="text-small text-muted mt-2">
+                    📅 Cobre: {getMonthsPreview(referenceMonth, totalInstallments)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="form-group mb-3">
+            <label className="form-label">
+              {isInstallment && paymentMethod === 'credit_card' ? 'Valor por Parcela (R$)' : 'Valor Pago (R$)'}
+            </label>
+            <input
+              type="number"
+              className="form-control"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              min="0.01"
+              step="0.01"
+              required
+              disabled={submitting}
+            />
+            {isInstallment && paymentMethod === 'credit_card' && (
+              <div className="text-small text-muted mt-1">
+                R$ {parsedAmount.toFixed(2)} por parcela • Total: R$ {(parsedAmount * totalInstallments).toFixed(2)}
+              </div>
+            )}
+          </div>
+
+          <div className="form-group mb-4">
+            <label className="form-label">Observações</label>
+            <textarea
+              className="form-control"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              rows={2}
+              placeholder="Opcional"
+              disabled={submitting}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onClose}
+              disabled={submitting}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={submitting}
+            >
+              {submitting ? 'Salvando...' : 'Confirmar pagamento'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

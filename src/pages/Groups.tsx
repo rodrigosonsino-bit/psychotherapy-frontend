@@ -3,7 +3,8 @@ import type { Patient } from '../types/api';
 import {
   Users, ChevronLeft, ChevronRight, ClipboardCheck,
   Clock, Calendar, CheckCircle2, XCircle, AlertCircle, RefreshCw,
-  UserPlus, UserMinus, Search, Pencil, Trash2, Plus, CreditCard, Banknote, Wallet
+  UserPlus, UserMinus, Search, Pencil, Trash2, Plus, CreditCard, Banknote, Wallet,
+  TrendingUp, CircleDollarSign, Hourglass
 } from 'lucide-react';
 import { fetchApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -110,6 +111,8 @@ export default function Groups() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentPatient, setPaymentPatient] = useState<{ patient_id: string; name: string } | null>(null);
   const [expandedPatientId, setExpandedPatientId] = useState<string | null>(null);
+  const [showEditPaymentModal, setShowEditPaymentModal] = useState(false);
+  const [paymentToEdit, setPaymentToEdit] = useState<any | null>(null);
 
   // Load groups
   const loadGroups = useCallback(async (selectId?: string) => {
@@ -434,6 +437,14 @@ export default function Groups() {
                   </div>
                 </div>
 
+                {/* Resumo Financeiro */}
+                <FinancialSummary
+                  group={selectedGroup}
+                  members={members}
+                  payments={payments}
+                  loading={loadingMembers || loadingPayments}
+                />
+
                 {/* Sub-Abas: Membros | Pagamentos */}
                 <div className="groups-subtabs">
                   <button
@@ -488,14 +499,24 @@ export default function Groups() {
                                               Parc. {p.installment_number}/{p.total_installments}: {formatCurrency(p.amount_cents)} ({p.payment_method === 'pix' ? 'PIX' : p.payment_method === 'cash' ? 'Dinheiro' : p.payment_method === 'debit_card' ? 'Débito' : 'Crédito'})
                                               {p.notes && <span className="text-muted" style={{ marginLeft: '0.25rem' }}>({p.notes})</span>}
                                             </span>
-                                            <button
-                                              className="icon-btn danger"
-                                              style={{ padding: '2px', marginLeft: '6px' }}
-                                              onClick={() => handleDeletePayment(selectedGroup.id, p)}
-                                              title="Estornar esta parcela"
-                                            >
-                                              <Trash2 size={12} />
-                                            </button>
+                                            <div className="flex gap-1">
+                                              <button
+                                                className="icon-btn"
+                                                style={{ padding: '2px' }}
+                                                onClick={() => { setPaymentToEdit({ ...p, groupId: selectedGroup.id, patientName: m.name }); setShowEditPaymentModal(true); }}
+                                                title="Editar este pagamento"
+                                              >
+                                                <Pencil size={12} />
+                                              </button>
+                                              <button
+                                                className="icon-btn danger"
+                                                style={{ padding: '2px' }}
+                                                onClick={() => handleDeletePayment(selectedGroup.id, p)}
+                                                title="Estornar esta parcela"
+                                              >
+                                                <Trash2 size={12} />
+                                              </button>
+                                            </div>
                                           </div>
                                         ))}
                                       </div>
@@ -754,6 +775,21 @@ export default function Groups() {
         />
       )}
 
+      {/* Edit Payment Modal */}
+      {showEditPaymentModal && selectedGroup && paymentToEdit && (
+        <EditPaymentModal
+          groupId={selectedGroup.id}
+          payment={paymentToEdit}
+          onClose={() => { setShowEditPaymentModal(false); setPaymentToEdit(null); }}
+          onSuccess={() => {
+            setShowEditPaymentModal(false);
+            setPaymentToEdit(null);
+            toast.success('Pagamento atualizado com sucesso!');
+            loadPayments(selectedGroup.id, currentMonth);
+          }}
+        />
+      )}
+
       {/* Payment Modal */}
       {showPaymentModal && selectedGroup && paymentPatient && (
         <PaymentModal
@@ -772,6 +808,202 @@ export default function Groups() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ── Edit Payment Modal ────────────────────────────────────────────────────────
+
+function EditPaymentModal({
+  groupId, payment, onClose, onSuccess
+}: {
+  groupId: string;
+  payment: any;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const toast = useToast();
+  const [submitting, setSubmitting] = useState(false);
+  const [amount, setAmount] = useState(String(payment.amount_cents / 100));
+  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cash' | 'debit_card' | 'credit_card'>(payment.payment_method);
+  const [notes, setNotes] = useState(payment.notes ?? '');
+
+  const isInstallment = payment.total_installments > 1;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amountCents = Math.round(parseFloat(amount) * 100);
+    if (isNaN(amountCents) || amountCents <= 0) {
+      toast.error('Valor inválido');
+      return;
+    }
+    try {
+      setSubmitting(true);
+      const url = `/api/psychotherapy/groups/${groupId}/payments/${payment.id}`;
+      console.log('[EditPayment] URL:', url);
+      console.log('[EditPayment] payload:', { amount_cents: amountCents, payment_method: paymentMethod, notes: notes || null });
+      await fetchApi(url, {
+        method: 'PUT',
+        body: JSON.stringify({
+          amount_cents: amountCents,
+          payment_method: paymentMethod,
+          notes: notes || null,
+        }),
+      });
+      onSuccess();
+    } catch (err) {
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Erro ao atualizar pagamento.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content animate-fade-in" style={{ maxWidth: '440px' }}>
+        <h2 className="text-h2 mb-1">Editar Pagamento</h2>
+        <p className="text-body mb-4" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+          {payment.patientName}
+          {isInstallment && (
+            <span style={{ marginLeft: '0.5rem', color: 'var(--text-muted)' }}>
+              · Parcela {payment.installment_number}/{payment.total_installments}
+            </span>
+          )}
+        </p>
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-group mb-4">
+            <label className="form-label">Forma de Pagamento</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+              {(['pix', 'cash', 'debit_card', 'credit_card'] as const).map(method => (
+                <button
+                  key={method}
+                  type="button"
+                  className={`btn ${paymentMethod === method ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ justifyContent: 'center', gap: '0.35rem', fontSize: '0.85rem', padding: '0.5rem' }}
+                  onClick={() => setPaymentMethod(method)}
+                >
+                  {method === 'pix' && <><Wallet size={14} /> PIX</>}
+                  {method === 'cash' && <><Banknote size={14} /> Dinheiro</>}
+                  {method === 'debit_card' && <><CreditCard size={14} /> Débito</>}
+                  {method === 'credit_card' && <><CreditCard size={14} /> Crédito</>}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group mb-3">
+            <label className="form-label">Valor (R$)</label>
+            <input
+              type="number"
+              className="form-control"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              min="0.01"
+              step="0.01"
+              required
+              disabled={submitting}
+              autoFocus
+            />
+          </div>
+
+          <div className="form-group mb-4">
+            <label className="form-label">Observações</label>
+            <textarea
+              className="form-control"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              rows={2}
+              placeholder="Opcional"
+              disabled={submitting}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={submitting}>
+              Cancelar
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={submitting}>
+              {submitting ? 'Salvando...' : 'Salvar alterações'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Financial Summary ─────────────────────────────────────────────────────────
+
+function FinancialSummary({
+  group, members, payments, loading
+}: {
+  group: TherapyGroup;
+  members: GroupMember[];
+  payments: any[];
+  loading: boolean;
+}) {
+  if (loading || members.length === 0) return null;
+
+  const feePerMember = group.monthly_fee_cents ?? 0;
+  const totalExpected = members.length * feePerMember;
+  const totalReceived = payments.reduce((sum: number, p: any) => sum + (p.total_paid_cents || 0), 0);
+  // Cálculo por paciente: evita que pagamento excedente de um membro mascare dívida de outro
+  const totalPending = payments.reduce((sum: number, p: any) => {
+    const fee = p.monthly_fee_cents ?? feePerMember;
+    const paid = p.total_paid_cents ?? 0;
+    return sum + Math.max(0, fee - paid);
+  }, 0);
+
+  const paidCount = payments.filter((p: any) => p.payment_status === 'paid').length;
+  const partialCount = payments.filter((p: any) => p.payment_status === 'partial').length;
+  const pendingCount = payments.filter((p: any) => p.payment_status === 'pending').length;
+  const total = payments.length;
+  const adimplencia = total > 0 ? Math.round((paidCount / total) * 100) : 0;
+
+  return (
+    <div className="fin-summary">
+      <div className="fin-kpi-row">
+        <div className="fin-kpi fin-kpi--neutral">
+          <span className="fin-kpi-icon"><CircleDollarSign size={15} /></span>
+          <div>
+            <span className="fin-kpi-label">Receita esperada</span>
+            <span className="fin-kpi-value">{formatCurrency(totalExpected)}</span>
+          </div>
+        </div>
+        <div className="fin-kpi fin-kpi--success">
+          <span className="fin-kpi-icon"><TrendingUp size={15} /></span>
+          <div>
+            <span className="fin-kpi-label">Recebido</span>
+            <span className="fin-kpi-value">{formatCurrency(totalReceived)}</span>
+          </div>
+        </div>
+        <div className="fin-kpi fin-kpi--danger">
+          <span className="fin-kpi-icon"><Hourglass size={15} /></span>
+          <div>
+            <span className="fin-kpi-label">Pendente</span>
+            <span className="fin-kpi-value">{formatCurrency(totalPending)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="fin-status-row">
+        <span className="fin-status-pill fin-status-pill--paid">
+          <span className="payment-dot paid" />
+          {paidCount} pago{paidCount !== 1 ? 's' : ''}
+        </span>
+        <span className="fin-status-pill fin-status-pill--partial">
+          <span className="payment-dot partial" />
+          {partialCount} parcial{partialCount !== 1 ? 'is' : ''}
+        </span>
+        <span className="fin-status-pill fin-status-pill--pending">
+          <span className="payment-dot pending" />
+          {pendingCount} pendente{pendingCount !== 1 ? 's' : ''}
+        </span>
+        <span className="fin-adimplencia">
+          {adimplencia}% adimplência
+        </span>
+      </div>
     </div>
   );
 }

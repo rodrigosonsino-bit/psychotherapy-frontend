@@ -68,7 +68,7 @@ export async function fetchApi<T = unknown>(
         });
 
         if (!retryResponse.ok) {
-          let errorMsg = 'Erro na requisição';
+          let errorMsg = `Erro ${retryResponse.status}`;
           try {
             const errData = await retryResponse.json();
             errorMsg = errData.error || errData.message || errorMsg;
@@ -95,7 +95,7 @@ export async function fetchApi<T = unknown>(
   }
 
   if (!response.ok) {
-    let errorMsg = 'Erro na requisição';
+    let errorMsg = `Erro ${response.status}`;
     try {
       const data = await response.json();
       errorMsg = data.error || data.message || errorMsg;

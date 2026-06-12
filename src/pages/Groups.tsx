@@ -1214,25 +1214,43 @@ function AddMemberModal({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    let active = true;
     async function load() {
       try {
-        const res = await fetchApi<{ data: Patient[] }>('/api/psychotherapy/patients?includeInactive=false');
-        setPatients(res.data);
+        setLoading(true);
+        const params = new URLSearchParams({ limit: '100' });
+        if (search) {
+          params.set('search', search);
+        }
+        const res = await fetchApi<{ data: Patient[] }>(`/api/psychotherapy/patients?${params}`);
+        if (active) {
+          setPatients(res.data);
+        }
       } catch {
-        toast.error('Erro ao carregar pacientes.');
+        if (active) {
+          toast.error('Erro ao carregar pacientes.');
+        }
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     }
-    load();
-  }, [toast]);
+
+    const timer = setTimeout(() => {
+      load();
+    }, 300);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [search, toast]);
 
   const currentIds = new Set(currentMembers.map(m => m.patient_id));
   
   const availablePatients = patients.filter(p => !currentIds.has(p.id));
-  const filteredPatients = availablePatients.filter(p => 
-    p.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredPatients = availablePatients;
 
   const handleAdd = async (patientId: string) => {
     try {

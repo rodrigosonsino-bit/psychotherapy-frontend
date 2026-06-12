@@ -17,7 +17,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
-type Tab = 'dados' | 'prontuario' | 'historico';
+type Tab = 'dados' | 'prontuario' | 'historico' | 'grupos';
 
 const STATUS_PLAN_LABEL: Record<TreatmentPlanStatus, string> = {
   active: 'Ativo', completed: 'Concluído', suspended: 'Suspenso',
@@ -94,7 +94,7 @@ export default function PatientProfile() {
 
       {/* Abas */}
       <div style={{ display: 'flex', gap: '0.25rem', borderBottom: '2px solid var(--border-color)', marginBottom: '1.5rem' }}>
-        {(['dados', 'prontuario', 'historico'] as Tab[]).map(tab => (
+        {(['dados', 'prontuario', 'historico', 'grupos'] as Tab[]).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -107,7 +107,7 @@ export default function PatientProfile() {
               fontSize: '0.9375rem',
             }}
           >
-            {tab === 'dados' ? 'Dados Cadastrais' : tab === 'prontuario' ? 'Prontuário' : 'Histórico'}
+            {tab === 'dados' ? 'Dados Cadastrais' : tab === 'prontuario' ? 'Prontuário' : tab === 'historico' ? 'Histórico' : 'Grupos'}
           </button>
         ))}
       </div>
@@ -121,6 +121,9 @@ export default function PatientProfile() {
       )}
       {activeTab === 'historico' && (
         <HistoricoTab patientId={patient.id} patientName={patient.name} />
+      )}
+      {activeTab === 'grupos' && (
+        <GruposTab patientId={patient.id} />
       )}
     </div>
   );
@@ -776,6 +779,182 @@ function HistoricoTab({ patientId, patientName }: { patientId: string; patientNa
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete({ open: false, id: null })}
       />
+    </div>
+  );
+}
+
+// ── Aba 4: Grupos Terapêuticos ───────────────────────────────────────────────
+
+function GruposTab({ patientId }: { patientId: string }) {
+  const toast = useToast();
+  const [patientGroups, setPatientGroups] = useState<any[]>([]);
+  const [allGroups, setAllGroups] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedGroupId, setSelectedGroupId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [pgRes, allRes] = await Promise.all([
+        fetchApi<{ success: boolean; data: any[] }>(`/api/psychotherapy/patients/${patientId}/groups`),
+        fetchApi<{ success: boolean; data: any[] }>('/api/psychotherapy/groups?includeInactive=false')
+      ]);
+      setPatientGroups(pgRes.data || pgRes || []);
+      setAllGroups(allRes.data || allRes || []);
+    } catch (err) {
+      toast.error('Erro ao carregar dados dos grupos.');
+    } finally {
+      setLoading(false);
+    }
+  }, [patientId, toast]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleAddGroup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedGroupId) return;
+
+    try {
+      setSubmitting(true);
+      await fetchApi(`/api/psychotherapy/groups/${selectedGroupId}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ patientId })
+      });
+      toast.success('Paciente adicionado ao grupo com sucesso!');
+      setSelectedGroupId('');
+      loadData();
+    } catch (err) {
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Erro ao adicionar ao grupo.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRemoveGroup = async (groupId: string, groupName: string) => {
+    if (!confirm(`Remover o paciente deste grupo ("${groupName}")?\n\nIsso não apagará o histórico financeiro.`)) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await fetchApi(`/api/psychotherapy/groups/${groupId}/members/${patientId}`, {
+        method: 'DELETE'
+      });
+      toast.success('Paciente removido do grupo com sucesso!');
+      loadData();
+    } catch (err) {
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Erro ao remover do grupo.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const currentGroupIds = new Set(patientGroups.map(g => g.id));
+  const availableGroups = allGroups.filter(g => !currentGroupIds.has(g.id));
+
+  const DAY_NAMES = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+  const formatGroupDetails = (g: any) => {
+    const details: string[] = [];
+    if (g.day_of_week != null) details.push(DAY_NAMES[g.day_of_week]);
+    if (g.start_time) details.push(g.start_time.slice(0, 5));
+    if (g.duration_minutes) details.push(`${g.duration_minutes} min`);
+    return details.join(' · ');
+  };
+
+  return (
+    <div style={{ maxWidth: '640px' }}>
+      {/* Adicionar a um grupo */}
+      <div className="panel" style={{ padding: '1.25rem', marginBottom: '1.5rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius)', background: 'var(--bg-panel)' }}>
+        <h3 style={{ margin: '0 0 1rem', fontSize: '1.05rem', fontWeight: 600 }}>Vincular a um Grupo Terapêutico</h3>
+        
+        {loading ? (
+          <div style={{ color: 'var(--text-secondary)' }}>Carregando grupos...</div>
+        ) : availableGroups.length === 0 ? (
+          <p style={{ color: 'var(--text-secondary)', margin: 0 }}>Este paciente já faz parte de todos os grupos ativos disponíveis.</p>
+        ) : (
+          <form onSubmit={handleAddGroup} style={{ display: 'flex', gap: '0.75rem', alignItems: 'end', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '200px' }}>
+              <label className="form-label" style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Selecione o Grupo</label>
+              <select
+                className="form-control"
+                value={selectedGroupId}
+                onChange={e => setSelectedGroupId(e.target.value)}
+                required
+                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-input)' }}
+              >
+                <option value="">-- Selecione um grupo --</option>
+                {availableGroups.map(g => (
+                  <option key={g.id} value={g.id}>
+                    {g.name} {g.day_of_week != null ? `(${DAY_NAMES[g.day_of_week]})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button 
+              type="submit" 
+              className="btn btn-primary" 
+              disabled={submitting || !selectedGroupId}
+              style={{ height: '38px', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0 1rem' }}
+            >
+              <Plus size={16} /> Vincular
+            </button>
+          </form>
+        )}
+      </div>
+
+      {/* Listagem de grupos atuais */}
+      <div className="panel" style={{ padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius)', background: 'var(--bg-panel)' }}>
+        <h3 style={{ margin: '0 0 1rem', fontSize: '1.05rem', fontWeight: 600 }}>Grupos Vinculados</h3>
+        
+        {loading ? (
+          <div style={{ color: 'var(--text-secondary)' }}>Carregando grupos vinculados...</div>
+        ) : patientGroups.length === 0 ? (
+          <p style={{ color: 'var(--text-secondary)', margin: 0 }}>Este paciente não está vinculado a nenhum grupo terapêutico.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {patientGroups.map(g => (
+              <div 
+                key={g.id} 
+                style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  padding: '0.75rem 1rem', 
+                  border: '1px solid var(--border-color)', 
+                  borderRadius: '6px', 
+                  background: 'var(--bg-item, rgba(0,0,0,0.02))' 
+                }}
+              >
+                <div>
+                  <strong style={{ fontSize: '0.9375rem', color: 'var(--text-primary)' }}>{g.name}</strong>
+                  <div className="text-small" style={{ color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                    {formatGroupDetails(g)}
+                  </div>
+                  {g.joined_at && (
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted, #888)', marginTop: '0.15rem' }}>
+                      Entrou em: {new Date(g.joined_at).toLocaleDateString('pt-BR')}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="btn-icon text-danger"
+                  title="Remover do Grupo"
+                  disabled={submitting}
+                  onClick={() => handleRemoveGroup(g.id, g.name)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.5rem' }}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1287,13 +1287,13 @@ function AddMemberModal({
         <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border-light)', borderRadius: '6px' }}>
           {loading ? (
             <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Carregando...</div>
+          ) : patients.length === 0 ? (
+            <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              {search ? 'Nenhum paciente encontrado na busca.' : 'Nenhum paciente cadastrado.'}
+            </div>
           ) : availablePatients.length === 0 ? (
             <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              Todos os pacientes já estão neste grupo.
-            </div>
-          ) : filteredPatients.length === 0 ? (
-            <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              Nenhum paciente encontrado na busca.
+              Todos os pacientes correspondentes já estão neste grupo.
             </div>
           ) : (
             <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
